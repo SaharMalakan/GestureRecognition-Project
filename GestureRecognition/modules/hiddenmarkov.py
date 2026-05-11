@@ -15,6 +15,20 @@ class HMMModule(Module):
     """
 
     def __init__(self, outputSignal="markov", model_path="data/hmm.pkl", **kwargs):
+
+        self.outputSignal = outputSignal
+        self.model_path = model_path
+
+        super().__init__(
+            inputSignals=["config", "preprocessor"],
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    outputSignal: {}
+                }
+            },
+            name="hiddenmarkov",
+        )       
         """
         Konstruktor des Moduls.
 
@@ -71,6 +85,15 @@ class HMMModule(Module):
         )
 
     def start(self, data):
+
+        print("=== HMM START ===")
+
+        print("Model path:")
+        print(self.model_path)
+
+        self.model = None
+
+        return {}
         """
         Initialisierung des Moduls.
 
@@ -107,9 +130,32 @@ class HMMModule(Module):
         dict
             Ein leeres Dictionary.
         """
-        return {}
+        
 
     def step(self, data):
+
+        print("\n========== HMM STEP ==========")
+
+        print("Available data keys:")
+        print(data.keys())
+
+        preprocessor_data = data.get("preprocessor")
+
+        print("\nPreprocessor data:")
+        print(preprocessor_data)
+
+        if preprocessor_data is None:
+            print("No trajectory received")
+            return {}
+
+        result = {
+            "label": "unknown",
+            "score": 0.0
+        }
+
+        return {
+            self.outputSignal: result
+        }
         """
         Verarbeitung eines einzelnen Frames.
 
