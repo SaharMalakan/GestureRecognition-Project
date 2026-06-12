@@ -1,4 +1,4 @@
-from SignalHub import Module, get_nested_key
+from SignalHub import GALY, Module, get_nested_key
 from collections import deque
 
 class TrailMarker(Module):
@@ -100,6 +100,12 @@ class TrailMarker(Module):
         dict
             Ein leeres Dictionary.
         """
+        config = data.get("config", {})
+        self.finger_idx = get_nested_key("trailmarker.finger_idx", config, default=8)
+        self.max_lost = get_nested_key("trailmarker.max_lost", config, default=10)
+        trail_length = get_nested_key("trailmarker.trail_length", config, default=30)
+        self.trail = deque(maxlen=trail_length)
+        self.lost_frames = 0
         return {}
 
     def step(self, data):
@@ -155,7 +161,24 @@ class TrailMarker(Module):
 
             ``return { ..., "galy": galy}``
         """
-        return {}
+        galy = GALY()
+        detector = data.get("detector")
+
+        if not detector or not detector.hand_landmarks:
+            self.lost_frames += 1
+            if self.lost_frames > self.max_lost:
+                self.trail.clear()
+            return {"galy": galy}
+
+        self.lost_frames = 0
+        lm = detector.hand_landmarks[0][self.finger_idx]
+        self.trail.append((lm.x, lm.y))
+
+        trail_list = list(self.trail)
+        for i in range(1, len(trail_list)):
+            galy.line(trail_list[i - 1], trail_list[i], (0, 255, 255), 2)
+
+        return {"galy": galy}
 
     def stop(self, data):
         """
