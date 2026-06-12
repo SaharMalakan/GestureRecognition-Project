@@ -1,15 +1,23 @@
+import os
+
 import cv2
 import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from SignalHub import GALY, bgr, get_nested_key, Module
+from SignalHub import GALY, bgr, Module
 
 mp_hand = mp.tasks.vision.HandLandmarksConnections
 
 
 def draw_hand_landmarks(hand_landmarks, galy: GALY):
+    """Zeichnet die Knochen (Linien) und Gelenke (Kreise) einer Hand.
+
+    ``hand_landmarks`` ist die Landmarken-Liste *einer* Hand aus MediaPipe.
+    Jede Landmarke hat normalisierte Koordinaten ``.x`` und ``.y`` (Werte 0..1).
+    Pro Finger werden zuerst die Verbindungslinien und danach die Punkte gezeichnet.
+    """
     lm = {
         "thumb":         {"color": bgr("#0000FF")},
         "index_finger":  {"color": bgr("#00FF00")},
@@ -37,173 +45,101 @@ def draw_hand_landmarks(hand_landmarks, galy: GALY):
 
 
 class HandDetector(Module):
-    """
-    Modul zur Erkennung von Händen und deren Landmarken.
+    """Erkennt Hände im Kamerabild und liefert deren Landmarken.
 
-    Dieses Modul verwendet das MediaPipe Hand Landmarker Modell, um Hände
-    in einem Kamerabild zu erkennen und deren Landmarken zu bestimmen.
-
-    Ziel ist es, die Webcam-Bilder zu verarbeiten, eine Handdetektion
-    durchzuführen und die erkannten Landmarken sowie eine Visualisierung
-    an das Framework zurückzugeben.
+    Das Modul nutzt das MediaPipe *Hand Landmarker* Modell. Pro Frame bekommt es
+    das aktuelle Kamerabild (Signal ``webcam``), erkennt darin die Hand(-Gelenke)
+    und gibt das Ergebnis als Signal ``detector`` an die nachfolgenden Module
+    (TrailMarker, Preprocessor) weiter. Zusätzlich wird eine Visualisierung
+    (``galy``) zurückgegeben, damit man die erkannte Hand live sieht.
     """
 
-    def __init__(self, outputSignal="detector"):
-        """
-        Konstruktor des Moduls.
-
-        Ziel ist es, das Modul beim Framework korrekt zu registrieren.
-
-        Hinweise
-        --------
-        - Ein Modul muss definieren, **welche Signale es empfangen möchte**.
-        - Diese werden über ``inputSignals`` angegeben.
-        - Nur Signale, die hier subscribed werden, erscheinen später im
-          ``data`` Dictionary der Methoden :meth:`start` und :meth:`step`.
-
-        Für dieses Modul werden unter anderem folgende Signale benötigt:
-
-        - ``config`` : Systemkonfiguration
-        - ``webcam`` : aktuelles Kamerabild
-
-        Zusätzlich muss ein **Output-Schema** definiert werden.
-
-        Output Schema
-        -------------
-        Das Modul erzeugt ein Signal mit dem Namen ``detector``.
-
-        Dieses Signal enthält das Ergebnis der Handdetektion, welches
-        beispielsweise Informationen über erkannte Hände und Landmarken
-        enthalten kann.
-
-        Beispiel:
-
-        ``outputSchema={"type": "object", "properties": {outputSignal: {}}}``
-
-        .. note::
-           Die Basisklasse :class:`Module` erwartet beim Aufruf von
-           ``super().__init__`` unter anderem:
-
-           - ``inputSignals``
-           - ``outputSchema``
-           - ``name`` des Moduls
+    def __init__(self, outputSignal="detector", model_path="hand_landmarker.task", num_hands=1):
+        """Registriert das Modul beim Framework.
 
         Parameters
         ----------
-        outputSignal : str, optional
-            Name des erzeugten Output-Signals.
+        outputSignal : str
+            Name des Signals, unter dem das Ergebnis veröffentlicht wird.
+        model_path : str
+            Pfad zur MediaPipe-Modelldatei ``hand_landmarker.task``.
+        num_hands : int
+            Wie viele Hände gleichzeitig gesucht werden (für eine Geste reicht 1).
         """
         super().__init__(
+            # Wir abonnieren genau die Signale, die wir lesen:
+            #   config = Konfiguration, webcam = aktuelles Kamerabild
             inputSignals=["config", "webcam"],
+            # Wir erzeugen genau ein Signal mit dem Namen aus outputSignal.
             outputSchema={"type": "object", "properties": {outputSignal: {}}},
             name="detector",
         )
+        self.outputSignal = outputSignal
+        self.model_path = model_path
+        self.num_hands = num_hands
+        self.detector = None  # wird in start() geladen
 
     def start(self, data):
+        """Lädt das Hand-Modell genau einmal beim Start.
+
+        Hier wird nur vorbereitet, nicht gerechnet: Wir bauen aus der
+        Modelldatei einen wiederverwendbaren ``HandLandmarker`` und merken ihn
+        uns in ``self.detector``, damit ihn ``step()`` für jedes Bild nutzen kann.
         """
-        Initialisierung des Moduls.
+        if not os.path.exists(self.model_path):
+            raise FileNotFoundError(
+                f"Modelldatei '{self.model_path}' nicht gefunden. "
+                "Lade sie herunter von: https://storage.googleapis.com/"
+                "mediapipe-models/hand_landmarker/hand_landmarker/float16/1/"
+                "hand_landmarker.task"
+            )
 
-        Diese Methode wird einmal beim Start des Moduls ausgeführt.
-
-        Ziel ist es, das benötigte Handdetektionsmodell zu laden und
-        für die spätere Verarbeitung vorzubereiten.
-
-        Hinweise
-        --------
-        - MediaPipe stellt eine Hand-Landmark-Erkennung
-          `bereit <https://colab.research.google.com/github/googlesamples/mediapipe/blob/main/examples/hand_landmarker/python/hand_landmarker.ipynb>`_.
-        - Laden sie wie im Artikel beschrieben das Modell ein und speichern sie das detector
-          Objekt in einem Attribut des Moduls. z.B. ``self.detector``
-
-        .. tip::
-           Halte die Initialisierung strikt getrennt von der Verarbeitung.
-           In ``start`` sollte nur vorbereitet, nicht gerechnet werden.
-
-        Parameters
-        ----------
-        data : dict
-            Eingabedaten des Frameworks. Enthält unter anderem das
-            Signal ``config``.
-
-        Returns
-        -------
-        dict
-            Ein leeres Dictionary.
-        """
+        base_options = python.BaseOptions(model_asset_path=self.model_path)
+        options = vision.HandLandmarkerOptions(
+            base_options=base_options,
+            num_hands=self.num_hands,
+        )
+        self.detector = vision.HandLandmarker.create_from_options(options)
         return {}
 
     def step(self, data):
+        """Verarbeitet ein einzelnes Kamerabild.
+
+        Ablauf:
+            1. Bild holen und ins richtige Farbformat bringen (BGR -> RGB).
+            2. Hände mit MediaPipe erkennen.
+            3. Erkannte Hand(-Landmarken) auf einer Ebene visualisieren.
+            4. Erkennungsergebnis + Visualisierung zurückgeben.
         """
-        Verarbeitung eines einzelnen Frames.
+        frame = data["webcam"]
 
-        Ziel ist es, ein Kamerabild zu analysieren, Hände zu erkennen und
-        deren Landmarken zu bestimmen.
+        # 1. OpenCV liefert das Bild als BGR, MediaPipe erwartet RGB.
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        Hinweise
-        --------
-        - Greife auf das ``webcam`` Signal zu, um das aktuelle Bild zu erhalten.
-        - Das Bild liegt typischerweise als :class:`np.ndarray` vor.
-        - Für MediaPipe muss das Bild ggf. in ein geeignetes Format
-          konvertiert werden (:class:`mp.Image`).
-        - Anschließend kann das Bild an den Handdetektor übergeben werden.
-        - Das Ergebnis enthält Informationen über erkannte Hände sowie
-          deren Landmarken.
-        - Für jede erkannte Hand können die Landmarken anschließend
-          visualisiert werden.
-        - Für die Visualisierung kann ein :class:`GALY` Objekt verwendet werden.
-        - Die Funktion :func:`draw_hand_landmarks` kann genutzt werden,
-          um Landmarken und Verbindungen darzustellen.
+        # 2. Handerkennung durchführen.
+        #    result.hand_landmarks ist eine Liste: pro erkannter Hand 21 Punkte.
+        result = self.detector.detect(mp_image)
 
-        .. tip::
-           Arbeite schrittweise:
-            1. Bild holen
-            2. Format konvertieren
-            3. Detektion durchführen
-            4. Ergebnis verarbeiten / visualisieren
+        # 3. Visualisierung aufbauen.
+        height, width = frame.shape[:2]
+        galy = GALY()
+        galy.canvas("main", (width, height), (0, 0, 0))  # Zeichenfläche in Bildgröße
+        galy.blit("webcam", (0, 0))                       # Kamerabild als Hintergrund
+        galy.layer("landmarks")                           # eigene Ebene für die Hand
 
-        .. warning::
-            Achte darauf, dass:
-                - das Bildformat korrekt ist (RGB vs. BGR)
-                - die Detektion pro Frame effizient bleibt (Live-Demo)
+        # Die Landmarken sind normalisiert (0..1). Diese 2x3-Matrix skaliert sie
+        # auf Pixel: x -> x * width, y -> y * height.
+        galy.set_layer_affine_mapping(np.array([[width, 0, 0],
+                                                [0, height, 0]], dtype=float))
 
-        Parameters
-        ----------
-        data : dict
-            Enthält unter anderem:
+        for hand in result.hand_landmarks:
+            draw_hand_landmarks(hand, galy)
 
-            - ``webcam`` : aktuelles Kamerabild
-            - ``config`` : Systemkonfiguration
-
-        Returns
-        -------
-        dict
-            Soll das Ergebnis der Handdetektion sowie optional ein
-            :class:`GALY` Objekt für die Visualisierung enthalten.
-
-            Beispiel:
-
-            ``return {outputSignal: result, "galy": galy}``
-        """
-        return {}
+        # 4. Ergebnis (für TrailMarker/Preprocessor) + Visualisierung zurückgeben.
+        return {self.outputSignal: result, "galy": galy}
 
     def stop(self, data):
-        """
-        Wird aufgerufen, wenn das Modul beendet wird.
-
-        Ziel ist es, bei Bedarf Ressourcen freizugeben oder interne
-        Zustände zurückzusetzen.
-
-        Hinweise
-        --------
-        - In vielen Fällen ist keine spezielle Bereinigung notwendig.
-
-        .. note::
-           Diese Methode ist optional, kann aber wichtig werden,
-           wenn externe Ressourcen (z. B. Modelle, Streams) verwendet werden.
-
-        Parameters
-        ----------
-        data : dict
-            Letzte übergebene Daten des Frameworks.
-        """
-        pass
+        """Gibt das Modell beim Beenden frei."""
+        if self.detector is not None:
+            self.detector.close()
