@@ -1,5 +1,6 @@
 from SignalHub import GALY, get_nested_key, Module
 from collections import deque
+import numpy as np
 
 class Preprocessor(Module):
     """
@@ -62,6 +63,7 @@ class Preprocessor(Module):
             outputSchema={"type": "object", "properties": {outputSignal: {}}},
             name="preprocessor",
         )
+        self.outputSignal = outputSignal
 
     def start(self, data):
         """
@@ -104,6 +106,13 @@ class Preprocessor(Module):
         dict
             Ein leeres Dictionary.
         """
+        config = data.get("config", {})
+        self.finger_idx = get_nested_key("preprocessor.finger_idx", config, default=8)
+        self.max_lost = get_nested_key("preprocessor.max_lost", config, default=10)
+        self.min_points = get_nested_key("preprocessor.min_points", config, default=10)
+        trajectory_length = get_nested_key("preprocessor.trajectory_length", config, default=30)
+        self.trajectory = deque(maxlen=trajectory_length)
+        self.lost_frames = 0
         return {}
 
     def step(self, data):
@@ -164,7 +173,29 @@ class Preprocessor(Module):
 
             ``return {outputSignal: trajectory}``
         """
-        return {}
+        detector = data.get("detector")
+
+        if not detector or not detector.hand_landmarks:
+            self.lost_frames += 1
+            if self.lost_frames > self.max_lost:
+                self.trajectory.clear()
+            return {self.outputSignal: None}
+
+        self.lost_frames = 0
+        lm = detector.hand_landmarks[0][self.finger_idx]
+        self.trajectory.append((lm.x, lm.y))
+
+        if len(self.trajectory) < self.min_points:
+            return {self.outputSignal: None}
+
+        points = np.array(self.trajectory)
+        center = points.mean(axis=0)
+        points = points - center
+        scale = np.abs(points).max()
+        if scale > 0:
+            points = points / scale
+
+        return {self.outputSignal: points}
 
     def stop(self, data):
         """
