@@ -84,7 +84,12 @@ def data_labeling(times: int, label: str):
 
     # Gesture Recognizer laden. Der liefert pro Frame die erkannte Geste UND
     # die Hand-Landmarks - wir brauchen also nur dieses eine Modell.
-    base_options = python.BaseOptions(model_asset_path=str(GESTURE_MODEL))
+    # Modell als Bytes einlesen statt per Pfad zu uebergeben: MediaPipes interner
+    # Lader kommt mit Sonderzeichen im Pfad (z.B. das "ue" in "Duesseldorf") nicht
+    # klar und wirft sonst einen FileNotFoundError, obwohl die Datei da ist.
+    with open(GESTURE_MODEL, "rb") as f:
+        model_bytes = f.read()
+    base_options = python.BaseOptions(model_asset_buffer=model_bytes)
     options = vision.GestureRecognizerOptions(base_options=base_options, num_hands=1)
     recognizer = vision.GestureRecognizer.create_from_options(options)
 
