@@ -188,6 +188,9 @@ def evaluate_classifier():
                     color="white" if cm[i, j] > threshold else "black", fontsize=7)
 
     plt.tight_layout()
+    out_path = PROJECT_ROOT / "confusion_matrix.png"
+    plt.savefig(out_path, dpi=150)
+    print(f"Confusion Matrix gespeichert: {out_path}")
     plt.show()
 
 
