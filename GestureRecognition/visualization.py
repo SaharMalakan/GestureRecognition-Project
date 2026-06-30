@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
 DATASET_PATH = PROJECT_ROOT / "data" / "dataset.pkl"
 
-SEQUENCES_PER_CLASS = 5
+SEQUENCES_PER_CLASS = None   # None = ALLE Aufnahmen pro Klasse überlagern (z. B. alle 30 für "A")
 
 
 def _load_raw_tracks(label_dir: Path):
@@ -49,15 +49,17 @@ def visualize_dataset():
         ax.set_aspect("equal")
         ax.axis("off")
 
-        for track in tracks[:SEQUENCES_PER_CLASS]:
-            ax.plot(track[:, 0], track[:, 1], alpha=0.6, linewidth=1.5)
-            ax.plot(track[0, 0], track[0, 1], "go", markersize=4)
-            ax.plot(track[-1, 0], track[-1, 1], "rs", markersize=4)
+        shown = tracks if SEQUENCES_PER_CLASS is None else tracks[:SEQUENCES_PER_CLASS]
+        for track in shown:
+            ax.plot(track[:, 0], track[:, 1], alpha=0.35, linewidth=1.0)
+            ax.plot(track[0, 0], track[0, 1], "go", markersize=3)
+            ax.plot(track[-1, 0], track[-1, 1], "rs", markersize=3)
 
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
 
-    plt.suptitle(f"Trajektorien pro Klasse  (gruen=Start, rot=Ende, max. {SEQUENCES_PER_CLASS} pro Klasse)")
+    anzahl = "alle" if SEQUENCES_PER_CLASS is None else f"max. {SEQUENCES_PER_CLASS}"
+    plt.suptitle(f"Trajektorien pro Klasse  (gruen=Start, rot=Ende, {anzahl} Aufnahmen pro Klasse)")
     plt.tight_layout()
     plt.show()
 
@@ -187,3 +189,29 @@ def evaluate_classifier():
 
     plt.tight_layout()
     plt.show()
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Visualisierung & Evaluation des Gesten-Datensatzes."
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="dataset",
+        choices=["dataset", "replay", "evaluate"],
+        help="dataset = Trajektorien pro Klasse, "
+             "replay = Aufnahmen abspielen, "
+             "evaluate = Accuracy + Confusion Matrix (braucht HMMClassifier). "
+             "Standard: dataset",
+    )
+    args = parser.parse_args()
+
+    if args.command == "dataset":
+        visualize_dataset()
+    elif args.command == "replay":
+        replay_recordings()
+    elif args.command == "evaluate":
+        evaluate_classifier()
