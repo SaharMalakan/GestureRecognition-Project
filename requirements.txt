@@ -1,4 +1,4 @@
-numpy<2
+numpy>=2.0,<2.8
 mediapipe==0.10.32
 signalhub @ git+https://github.com/jaboll-ai/SignalHub.git@pyproject
 tqdm==4.67.3
