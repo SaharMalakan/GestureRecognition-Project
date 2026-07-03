@@ -2,6 +2,28 @@ from SignalHub import GALY, get_nested_key, Module
 from collections import deque
 import numpy as np
 
+
+def resample_trajectory(points, n=32):
+    """Trajektorie per Bogenlänge auf ``n`` feste Punkte umtasten.
+
+    Muss IDENTISCH zu labeling.resample_trajectory sein - sonst passt die
+    Live-Eingabe nicht zu den Trainingsdaten. Macht die Geste geschwindigkeits-
+    und längeninvariant (gleich viele, gleichmäßig verteilte Punkte pro Geste).
+    """
+    points = np.asarray(points, dtype=float)
+    if len(points) < 2:
+        return np.repeat(points[:1], n, axis=0) if len(points) else points
+    seg = np.sqrt((np.diff(points, axis=0) ** 2).sum(axis=1))
+    dist = np.concatenate([[0.0], np.cumsum(seg)])
+    if dist[-1] == 0:
+        return np.repeat(points[:1], n, axis=0)
+    u = dist / dist[-1]
+    t = np.linspace(0.0, 1.0, n)
+    x = np.interp(t, u, points[:, 0])
+    y = np.interp(t, u, points[:, 1])
+    return np.stack([x, y], axis=1)
+
+
 class Preprocessor(Module):
     """
     Modul zur Vorverarbeitung von Fingertrajektorien.
@@ -110,6 +132,7 @@ class Preprocessor(Module):
         self.finger_idx = get_nested_key("preprocessor.finger_idx", config, default=8)
         self.max_lost = get_nested_key("preprocessor.max_lost", config, default=10)
         self.min_points = get_nested_key("preprocessor.min_points", config, default=10)
+        self.n_resample = get_nested_key("preprocessor.n_resample", config, default=32)
         trajectory_length = get_nested_key("preprocessor.trajectory_length", config, default=30)
         self.trajectory = deque(maxlen=trajectory_length)
         self.lost_frames = 0
@@ -189,6 +212,7 @@ class Preprocessor(Module):
             return {self.outputSignal: None}
 
         points = np.array(self.trajectory)
+        points = resample_trajectory(points, self.n_resample)  # feste Länge wie im Training
         center = points.mean(axis=0)
         points = points - center
         scale = np.abs(points).max()
