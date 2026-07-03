@@ -21,3 +21,4 @@ preprocessor:
   buffer_size: 140
   max_lost: 10
   min_steps: 15
+  n_resample: 32   # feste Punktzahl nach Bogenlängen-Resampling (muss zum Training passen)
