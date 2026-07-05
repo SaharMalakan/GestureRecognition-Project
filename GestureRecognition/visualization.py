@@ -14,7 +14,7 @@ SEQUENCES_PER_CLASS = None   # None = ALLE Aufnahmen pro Klasse überlagern (z. 
 
 
 def _load_raw_tracks(label_dir: Path):
-    """Laedt alle Rohtrajektorien aus einem Label-Ordner."""
+    """Lädt alle Rohtrajektorien aus einem Label-Ordner."""
     tracks = []
     for f in sorted(label_dir.glob("*.pickle")):
         with open(f, "rb") as fh:
