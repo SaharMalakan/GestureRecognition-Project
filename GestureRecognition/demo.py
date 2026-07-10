@@ -11,6 +11,7 @@ def run(parser: argparse.ArgumentParser):
         ConfigParser(parser),
         Webcam(),
         HandDetector(),
+        GestureController(),
         TrailMarker(),
         Preprocessor(),
         HMMModule(),

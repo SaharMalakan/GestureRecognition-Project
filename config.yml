@@ -16,9 +16,12 @@ webcam:
   flip: True
 preprocessor:
   finger_idx: 8
-  min_speed_corner: 0.02
-  reset_speed_corner: 0.024
-  buffer_size: 140
   max_lost: 10
-  min_steps: 15
+  min_points: 8    # kuerzere Aufnahmen verwerfen (siehe labeling.MIN_SEQUENCE_LEN)
   n_resample: 32   # feste Punktzahl nach Bogenlängen-Resampling (muss zum Training passen)
+gesturecontroller:
+  trigger_frames: 3   # so viele Frames muss eine Geste halten, damit sie zaehlt (Entprellung)
+trailmarker:
+  finger_idx: 8
+  max_lost: 10
+  trail_length: 300   # genug Platz fuer einen ganzen "gemalten" Buchstaben

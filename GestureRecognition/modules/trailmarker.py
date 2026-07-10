@@ -53,7 +53,7 @@ class TrailMarker(Module):
             Name des erzeugten Output-Signals.
         """
         super().__init__(
-            inputSignals=["config", "detector"],
+            inputSignals=["config", "detector", "gesturecontroller"],
             outputSchema={"type": "object", "properties": {outputSignal: {}}},
             name="trailmarker",
         )
@@ -103,7 +103,9 @@ class TrailMarker(Module):
         config = data.get("config", {})
         self.finger_idx = get_nested_key("trailmarker.finger_idx", config, default=8)
         self.max_lost = get_nested_key("trailmarker.max_lost", config, default=10)
-        trail_length = get_nested_key("trailmarker.trail_length", config, default=30)
+        # Gross genug fuer einen ganzen "gemalten" Buchstaben (Trail wird bei
+        # jedem neuen Start ueber die Geste sowieso geleert, siehe step()).
+        trail_length = get_nested_key("trailmarker.trail_length", config, default=300)
         self.trail = deque(maxlen=trail_length)
         self.lost_frames = 0
         return {}
@@ -162,6 +164,16 @@ class TrailMarker(Module):
             ``return { ..., "galy": galy}``
         """
         galy = GALY()
+        gc = data.get("gesturecontroller", {})
+
+        if gc.get("reset"):
+            self.trail.clear()
+
+        # Nur waehrend der Aufnahme (Zeigefinger hoch, siehe GestureController)
+        # ueberhaupt Punkte sammeln/zeichnen - genau wie beim Labeling-Tool.
+        if not gc.get("recording"):
+            return {"galy": galy}
+
         detector = data.get("detector")
 
         if not detector or not detector.hand_landmarks:
