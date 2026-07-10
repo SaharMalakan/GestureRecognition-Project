@@ -1,6 +1,8 @@
 import os
 import pickle
+import time
 
+import cv2
 import numpy as np
 
 from SignalHub import GALY, bgr, get_nested_key, Module
@@ -9,11 +11,15 @@ from SignalHub import GALY, bgr, get_nested_key, Module
 class HMMModule(Module):
     """Letztes Modul in der Pipeline - macht aus der Trajektorie eine Geste.
 
-    Kriegt vom Preprocessor pro Frame die fertig normalisierte
-    Fingertrajektorie rein (Signal "preprocessor") und jagt die durch
-    unser trainiertes HMM (HMMClassifier). Raus kommt das Label mit dem
-    besten Score, plus ein bisschen Text im Bild zur Kontrolle.
+    Kriegt vom Preprocessor GENAU DANN eine fertig normalisierte
+    Fingertrajektorie (Signal "preprocessor", sonst None), wenn die Aufnahme
+    per Faust gestoppt wurde, und jagt die durch unser trainiertes HMM
+    (HMMClassifier). Raus kommt das Label mit dem besten Score. Damit das
+    Ergebnis nicht wie frueher jeden Frame neu berechnet wird und flackert,
+    wird es fuer ``DISPLAY_SECONDS`` gross/zentriert stehen gelassen.
     """
+
+    DISPLAY_SECONDS = 2.0
 
     def __init__(self, outputSignal="markov", model_path="data/hmm.pkl", **kwargs):
         """Modul beim Framework anmelden.
@@ -30,6 +36,8 @@ class HMMModule(Module):
         self.outputSignal = outputSignal
         self.model_path = model_path
         self.model = None  # kommt erst in start()
+        self.last_result = None  # letztes klassifiziertes {"label", "score"}
+        self.last_time = 0.0      # wann das letzte Ergebnis kam (time.time())
 
     def start(self, data):
         """Modell einmal von der Platte laden, bevor's losgeht.
@@ -52,22 +60,24 @@ class HMMModule(Module):
         return {}
 
     def step(self, data):
-        """Pro Frame: Trajektorie nehmen, Modell fragen, Ergebnis anzeigen."""
+        """Pro Frame: bei fertiger Trajektorie klassifizieren, Ergebnis anzeigen.
+
+        ``trajectory`` ist nur in dem einen Frame nach dem Faust-Stop gesetzt
+        (siehe Preprocessor) - wir klassifizieren also GENAU EINMAL pro
+        Aufnahme, statt wie frueher jeden Frame neu (das flackerte, weil sich
+        die laufend gesammelte Trajektorie staendig aenderte).
+        """
         trajectory = data.get("preprocessor")
 
-        # solange der Preprocessor noch nicht genug Punkte hat, kommt hier
-        # None an - dann gibt's halt noch nichts zu erkennen, einfach warten
-        if trajectory is None:
-            return {self.outputSignal: None}
-
-        # decision_function/predict wollen eigentlich eine ganze Liste von
-        # Sequenzen (typisch sklearn-mäßig), wir haben aber nur eine einzige
-        # -> deswegen die [trajectory] mit den eckigen Klammern
-        scores = self.model.decision_function([trajectory])[0]
-        label = self.model.predict([trajectory])[0]
-        score = float(np.max(scores))  # höchster Score = wie sicher sich das Modell ist
-
-        result = {"label": label, "score": score}
+        if trajectory is not None:
+            # decision_function/predict wollen eigentlich eine ganze Liste von
+            # Sequenzen (typisch sklearn-mäßig), wir haben aber nur eine einzige
+            # -> deswegen die [trajectory] mit den eckigen Klammern
+            scores = self.model.decision_function([trajectory])[0]
+            label = self.model.predict([trajectory])[0]
+            score = float(np.max(scores))  # höchster Score = wie sicher sich das Modell ist
+            self.last_result = {"label": label, "score": score}
+            self.last_time = time.time()
 
         # eigene Ebene fürs Text-Zeichnen, NICHT die "landmarks"-Ebene vom
         # Handdetector mitbenutzen - die hat ein Affine-Mapping für 0..1
@@ -76,17 +86,28 @@ class HMMModule(Module):
         galy.layer("hiddenmarkov")
 
         config = data.get("config", {})
+        width = get_nested_key("webcam.width", config, default=640)
         height = get_nested_key("webcam.height", config, default=360)
 
-        galy.putText(
-            f"Geste: {label} ({score:.1f})",
-            (10, height - 15),  # unten links, ähnlich wie beim Labeling-Tool
-            fontScale=0.7,
-            color=bgr("#00FF00"),
-            thickness=2,
+        showing_result = (
+            self.last_result is not None
+            and (time.time() - self.last_time) < self.DISPLAY_SECONDS
         )
+        if showing_result:
+            text = str(self.last_result["label"])
+            (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 3.0, 6)
+            org = (max(0, width // 2 - text_w // 2), height // 2 + text_h // 2)
+            galy.putText(text, org, fontScale=3.0, color=bgr("#00FF00"), thickness=6)
+        else:
+            galy.putText(
+                "Zeigefinger hoch = Buchstaben malen",
+                (10, height - 15),  # unten links, ähnlich wie beim Labeling-Tool
+                fontScale=0.7,
+                color=bgr("#00FF00"),
+                thickness=2,
+            )
 
-        return {self.outputSignal: result, "galy": galy}
+        return {self.outputSignal: self.last_result, "galy": galy}
 
     def stop(self, data):
         """Brauchen wir nicht, das Modell hält keine Ressourcen offen."""

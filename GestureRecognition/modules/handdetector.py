@@ -45,16 +45,20 @@ def draw_hand_landmarks(hand_landmarks, galy: GALY):
 
 
 class HandDetector(Module):
-    """Erkennt Hände im Kamerabild und liefert deren Landmarken.
+    """Erkennt Hände im Kamerabild und liefert Landmarken + Geste.
 
-    Das Modul nutzt das MediaPipe *Hand Landmarker* Modell. Pro Frame bekommt es
-    das aktuelle Kamerabild (Signal ``webcam``), erkennt darin die Hand(-Gelenke)
-    und gibt das Ergebnis als Signal ``detector`` an die nachfolgenden Module
-    (TrailMarker, Preprocessor) weiter. Zusätzlich wird eine Visualisierung
-    (``galy``) zurückgegeben, damit man die erkannte Hand live sieht.
+    Das Modul nutzt den MediaPipe *Gesture Recognizer* (statt nur des reinen
+    Hand Landmarker), weil der zusätzlich zu den Hand-Landmarken auch gleich
+    die erkannte Geste (z.B. "Pointing_Up", "Closed_Fist") mitliefert - genau
+    das, was ``GestureController`` zum Steuern von Start/Stop braucht. Pro
+    Frame bekommt es das aktuelle Kamerabild (Signal ``webcam``), erkennt
+    darin die Hand(-Gelenke) + Geste und gibt das Ergebnis als Signal
+    ``detector`` an die nachfolgenden Module weiter. Zusätzlich wird eine
+    Visualisierung (``galy``) zurückgegeben, damit man die erkannte Hand live
+    sieht.
     """
 
-    def __init__(self, outputSignal="detector", model_path="hand_landmarker.task", num_hands=1):
+    def __init__(self, outputSignal="detector", model_path="gesture_recognizer.task", num_hands=1):
         """Registriert das Modul beim Framework.
 
         Parameters
@@ -62,7 +66,7 @@ class HandDetector(Module):
         outputSignal : str
             Name des Signals, unter dem das Ergebnis veröffentlicht wird.
         model_path : str
-            Pfad zur MediaPipe-Modelldatei ``hand_landmarker.task``.
+            Pfad zur MediaPipe-Modelldatei ``gesture_recognizer.task``.
         num_hands : int
             Wie viele Hände gleichzeitig gesucht werden (für eine Geste reicht 1).
         """
@@ -80,26 +84,32 @@ class HandDetector(Module):
         self.detector = None  # wird in start() geladen
 
     def start(self, data):
-        """Lädt das Hand-Modell genau einmal beim Start.
+        """Lädt das Gesture-Recognizer-Modell genau einmal beim Start.
 
         Hier wird nur vorbereitet, nicht gerechnet: Wir bauen aus der
-        Modelldatei einen wiederverwendbaren ``HandLandmarker`` und merken ihn
-        uns in ``self.detector``, damit ihn ``step()`` für jedes Bild nutzen kann.
+        Modelldatei einen wiederverwendbaren ``GestureRecognizer`` und merken
+        ihn uns in ``self.detector``, damit ihn ``step()`` für jedes Bild
+        nutzen kann.
         """
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(
                 f"Modelldatei '{self.model_path}' nicht gefunden. "
                 "Lade sie herunter von: https://storage.googleapis.com/"
-                "mediapipe-models/hand_landmarker/hand_landmarker/float16/1/"
-                "hand_landmarker.task"
+                "mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/"
+                "gesture_recognizer.task"
             )
 
-        base_options = python.BaseOptions(model_asset_path=self.model_path)
-        options = vision.HandLandmarkerOptions(
+        # Modell als Bytes einlesen statt per Pfad zu uebergeben: MediaPipes interner
+        # Lader kommt mit Sonderzeichen im Pfad (z.B. das "ue" in "Duesseldorf") nicht
+        # klar und wirft sonst einen FileNotFoundError, obwohl die Datei da ist.
+        with open(self.model_path, "rb") as f:
+            model_bytes = f.read()
+        base_options = python.BaseOptions(model_asset_buffer=model_bytes)
+        options = vision.GestureRecognizerOptions(
             base_options=base_options,
             num_hands=self.num_hands,
         )
-        self.detector = vision.HandLandmarker.create_from_options(options)
+        self.detector = vision.GestureRecognizer.create_from_options(options)
         return {}
 
     def step(self, data):
@@ -117,9 +127,10 @@ class HandDetector(Module):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        # 2. Handerkennung durchführen.
+        # 2. Hand- + Gestenerkennung durchführen.
         #    result.hand_landmarks ist eine Liste: pro erkannter Hand 21 Punkte.
-        result = self.detector.detect(mp_image)
+        #    result.gestures liefert zusätzlich die erkannte Geste pro Hand.
+        result = self.detector.recognize(mp_image)
 
         # 3. Visualisierung aufbauen.
         height, width = frame.shape[:2]
