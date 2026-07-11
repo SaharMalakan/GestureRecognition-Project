@@ -30,6 +30,7 @@ class HMMModule(Module):
         self.outputSignal = outputSignal
         self.model_path = model_path
         self.model = None  # kommt erst in start()
+        self._model_mtime = None
 
     def start(self, data):
         """Modell einmal von der Platte laden, bevor's losgeht.
@@ -46,13 +47,36 @@ class HMMModule(Module):
                 "das trainierte Modell per pickle dort abspeichern."
             )
 
-        with open(self.model_path, "rb") as f:
-            self.model = pickle.load(f)
+        self._load_model()
 
         return {}
 
+    def _load_model(self):
+        """Modell (neu) von der Platte laden und den Stand (mtime) merken."""
+        with open(self.model_path, "rb") as f:
+            self.model = pickle.load(f)
+        self._model_mtime = os.path.getmtime(self.model_path)
+
+    def _reload_if_changed(self):
+        """Hot-Reload: läuft die Demo während neu trainiert wird, merken wir
+        an der mtime von hmm.pkl, dass es ein frischeres Modell gibt, und
+        laden es automatisch nach - kein Neustart der Demo nötig.
+        """
+        try:
+            mtime = os.path.getmtime(self.model_path)
+        except OSError:
+            return  # Datei kurzzeitig weg (wird gerade neu geschrieben) - nächster Frame
+        if mtime == self._model_mtime:
+            return
+        try:
+            self._load_model()
+            print(f"[hiddenmarkov] Modell neu geladen: {self.model_path}")
+        except (OSError, pickle.PickleError):
+            pass  # retrain.py schreibt evtl. gerade noch - beim nächsten Frame erneut versuchen
+
     def step(self, data):
         """Pro Frame: Trajektorie nehmen, Modell fragen, Ergebnis anzeigen."""
+        self._reload_if_changed()
         trajectory = data.get("preprocessor")
 
         # solange der Preprocessor noch nicht genug Punkte hat, kommt hier
