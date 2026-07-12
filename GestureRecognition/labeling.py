@@ -20,6 +20,12 @@ Aufnehmen geht am einfachsten direkt über die Konsole:
 
 Hinweis: dafür wird das Modell ``gesture_recognizer.task`` im Projekt-Root
 gebraucht (siehe Fehlermeldung beim Start, falls es fehlt).
+
+Den Datensatz aus den Aufnahmen bauen (ohne gleich neu zu trainieren) geht
+ebenfalls direkt über die Konsole:
+
+    python -m GestureRecognition.labeling build [output_path]
+    # z.B.:  python -m GestureRecognition.labeling build data/dataset.pkl
 """
 
 import sys
@@ -354,11 +360,17 @@ def inspect_recording(path):
 # --- direkt aus der Konsole aufrufbar ---------------------------------------
 
 if __name__ == "__main__":
-    # Nutzung:  python -m GestureRecognition.labeling <label> [anzahl]
-    if len(sys.argv) >= 2:
+    # Nutzung:
+    #   python -m GestureRecognition.labeling <label> [anzahl]   -> aufnehmen
+    #   python -m GestureRecognition.labeling build [output_path] -> Datensatz bauen
+    if len(sys.argv) >= 2 and sys.argv[1] == "build":
+        zielpfad = sys.argv[2] if len(sys.argv) > 2 else PROJECT_ROOT / "data" / "dataset.pkl"
+        dataset_building(zielpfad)
+    elif len(sys.argv) >= 2:
         gesten_label = sys.argv[1]
         anzahl = int(sys.argv[2]) if len(sys.argv) > 2 else 5
         data_labeling(anzahl, gesten_label)
     else:
         print("Aufruf:  python -m GestureRecognition.labeling <label> [anzahl]")
         print("Beispiel: python -m GestureRecognition.labeling A 10")
+        print("      oder python -m GestureRecognition.labeling build [output_path]")
