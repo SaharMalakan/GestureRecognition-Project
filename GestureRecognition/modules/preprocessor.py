@@ -1,6 +1,27 @@
 from SignalHub import GALY, get_nested_key, Module
-from collections import deque
 import numpy as np
+
+
+def resample_trajectory(points, n=32):
+    """Trajektorie per Bogenlänge auf ``n`` feste Punkte umtasten.
+
+    Muss IDENTISCH zu labeling.resample_trajectory sein - sonst passt die
+    Live-Eingabe nicht zu den Trainingsdaten. Macht die Geste geschwindigkeits-
+    und längeninvariant (gleich viele, gleichmäßig verteilte Punkte pro Geste).
+    """
+    points = np.asarray(points, dtype=float)
+    if len(points) < 2:
+        return np.repeat(points[:1], n, axis=0) if len(points) else points
+    seg = np.sqrt((np.diff(points, axis=0) ** 2).sum(axis=1))
+    dist = np.concatenate([[0.0], np.cumsum(seg)])
+    if dist[-1] == 0:
+        return np.repeat(points[:1], n, axis=0)
+    u = dist / dist[-1]
+    t = np.linspace(0.0, 1.0, n)
+    x = np.interp(t, u, points[:, 0])
+    y = np.interp(t, u, points[:, 1])
+    return np.stack([x, y], axis=1)
+
 
 class Preprocessor(Module):
     """
@@ -59,7 +80,7 @@ class Preprocessor(Module):
             Name des erzeugten Output-Signals.
         """
         super().__init__(
-            inputSignals=["config", "detector"],
+            inputSignals=["config", "detector", "gesturecontroller"],
             outputSchema={"type": "object", "properties": {outputSignal: {}}},
             name="preprocessor",
         )
@@ -109,9 +130,14 @@ class Preprocessor(Module):
         config = data.get("config", {})
         self.finger_idx = get_nested_key("preprocessor.finger_idx", config, default=8)
         self.max_lost = get_nested_key("preprocessor.max_lost", config, default=10)
-        self.min_points = get_nested_key("preprocessor.min_points", config, default=10)
-        trajectory_length = get_nested_key("preprocessor.trajectory_length", config, default=30)
-        self.trajectory = deque(maxlen=trajectory_length)
+        # Gleicher Schwellwert wie labeling.MIN_SEQUENCE_LEN - kuerzere
+        # Aufnahmen wuerden auch beim Trainingsdatensatz verworfen.
+        self.min_points = get_nested_key("preprocessor.min_points", config, default=8)
+        self.n_resample = get_nested_key("preprocessor.n_resample", config, default=32)
+        # Keine feste Laenge/Deque mehr: die Trajektorie wird bei Start (ueber
+        # GestureController) geleert und waechst bis zum Stop - genau wie beim
+        # Labeling, wo auch die GANZE Aufnahme zwischen Start und Stop zaehlt.
+        self.trajectory = []
         self.lost_frames = 0
         return {}
 
@@ -173,29 +199,40 @@ class Preprocessor(Module):
 
             ``return {outputSignal: trajectory}``
         """
-        detector = data.get("detector")
+        gc = data.get("gesturecontroller", {})
 
-        if not detector or not detector.hand_landmarks:
-            self.lost_frames += 1
-            if self.lost_frames > self.max_lost:
-                self.trajectory.clear()
-            return {self.outputSignal: None}
+        if gc.get("reset"):
+            self.trajectory = []
+            self.lost_frames = 0
 
-        self.lost_frames = 0
-        lm = detector.hand_landmarks[0][self.finger_idx]
-        self.trajectory.append((lm.x, lm.y))
+        # Nur waehrend der Aufnahme (Zeigefinger hoch) Punkte sammeln - der
+        # Faust-Stop friert die Trajektorie ein, damit sie unten normalisiert
+        # werden kann, ohne dass die letzten (Faust-)Frames sie verfaelschen.
+        if gc.get("recording"):
+            detector = data.get("detector")
+            if not detector or not detector.hand_landmarks:
+                self.lost_frames += 1
+                if self.lost_frames > self.max_lost:
+                    self.trajectory = []
+            else:
+                self.lost_frames = 0
+                lm = detector.hand_landmarks[0][self.finger_idx]
+                self.trajectory.append((lm.x, lm.y))
 
-        if len(self.trajectory) < self.min_points:
-            return {self.outputSignal: None}
+        # Erst wenn die Aufnahme gerade gestoppt wurde (Faust erkannt), wird
+        # EINMAL normalisiert und weitergegeben - identisch zu
+        # labeling.normalize_trajectory (Training == Live!).
+        if gc.get("finished") and len(self.trajectory) >= self.min_points:
+            points = np.array(self.trajectory)
+            points = resample_trajectory(points, self.n_resample)
+            center = points.mean(axis=0)
+            points = points - center
+            scale = np.abs(points).max()
+            if scale > 0:
+                points = points / scale
+            return {self.outputSignal: points}
 
-        points = np.array(self.trajectory)
-        center = points.mean(axis=0)
-        points = points - center
-        scale = np.abs(points).max()
-        if scale > 0:
-            points = points / scale
-
-        return {self.outputSignal: points}
+        return {self.outputSignal: None}
 
     def stop(self, data):
         """

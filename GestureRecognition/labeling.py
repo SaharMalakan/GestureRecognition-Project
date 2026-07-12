@@ -49,6 +49,7 @@ GESTURE_MODEL = PROJECT_ROOT / "gesture_recognizer.task"  # MediaPipe Gesture Re
 
 FINGER_IDX = 8          # Zeigefinger-Spitze (gleicher Wert wie im Preprocessor)
 MIN_SEQUENCE_LEN = 8    # kürzere Aufnahmen werfen wir beim Datensatz-Bau raus
+N_RESAMPLE = 32         # feste Punktzahl nach Bogenlängen-Resampling (Training == Live!)
 
 # Steuer-Gesten (Namen kommen so vom MediaPipe Gesture Recognizer)
 START_GESTURE = "Pointing_Up"
@@ -242,15 +243,45 @@ def _next_index(label_dir: Path, label: str) -> int:
 
 # --- Datensatz bauen ---------------------------------------------------------
 
+def resample_trajectory(points, n=N_RESAMPLE):
+    """
+    Trajektorie per Bogenlänge auf ``n`` feste Punkte umtasten.
+
+    Warum: Aufnahmen haben unterschiedliche Länge/Geschwindigkeit - ein langsam
+    gemaltes "M" hat mehr Punkte als ein schnelles. Das HMM sieht dann pro Geste
+    andere Sequenzlängen und Punktdichten. Nach dem Umtasten hat JEDE Geste gleich
+    viele, entlang des Pfads gleichmäßig verteilte Punkte -> geschwindigkeits- und
+    längeninvariant. (Grösster Hebel für die Accuracy, empirisch belegt.)
+
+    Wichtig: identisch im Preprocessor live (modules/preprocessor.py)!
+    """
+    points = np.asarray(points, dtype=float)
+    if len(points) < 2:
+        # zu wenig Signal zum Interpolieren -> einzigen Punkt vervielfachen
+        return np.repeat(points[:1], n, axis=0) if len(points) else points
+    # kumulative Bogenlänge entlang der Spur
+    seg = np.sqrt((np.diff(points, axis=0) ** 2).sum(axis=1))
+    dist = np.concatenate([[0.0], np.cumsum(seg)])
+    if dist[-1] == 0:
+        return np.repeat(points[:1], n, axis=0)   # alle Punkte gleich (kein Weg)
+    u = dist / dist[-1]                            # 0..1 entlang des Pfads
+    t = np.linspace(0.0, 1.0, n)                   # n gleichmäßige Stützstellen
+    x = np.interp(t, u, points[:, 0])
+    y = np.interp(t, u, points[:, 1])
+    return np.stack([x, y], axis=1)
+
+
 def normalize_trajectory(points):
     """
     Trajektorie normalisieren - genau wie im Preprocessor (modules/preprocessor.py).
 
-    Zentrum abziehen und auf [-1, 1] skalieren. Dadurch wird die Geste
-    unabhängig davon, *wo* im Bild und *wie groß* sie ausgeführt wurde.
+    1. Bogenlängen-Resampling auf feste Punktzahl (geschwindigkeits-/längeninvariant).
+    2. Zentrum abziehen und auf [-1, 1] skalieren -> unabhängig von Ort und Größe.
+
     Wichtig: Training und Live-Erkennung müssen exakt gleich verarbeiten!
     """
     points = np.asarray(points, dtype=float)
+    points = resample_trajectory(points, N_RESAMPLE)   # NEU: erst auf feste Länge bringen
     center = points.mean(axis=0)
     points = points - center
     scale = np.abs(points).max()

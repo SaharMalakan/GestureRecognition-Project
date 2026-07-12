@@ -9,8 +9,9 @@ def run(parser: argparse.ArgumentParser):
     parser.add_argument("--webcam.width", required=False)
     modules = [
         ConfigParser(parser),
-        # Webcam(),
+        Webcam(),
         HandDetector(),
+        GestureController(),
         TrailMarker(),
         Preprocessor(),
         HMMModule(),
