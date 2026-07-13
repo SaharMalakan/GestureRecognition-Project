@@ -1,5 +1,8 @@
-from SignalHub import GALY, get_nested_key, Module
+from SignalHub import get_nested_key, Module
 import numpy as np
+
+from GestureRecognition.labeling import resample_trajectory as _resample_trajectory
+from GestureRecognition.labeling import _center_and_scale
 
 
 def resample_trajectory(points, n=32):
@@ -9,18 +12,7 @@ def resample_trajectory(points, n=32):
     Live-Eingabe nicht zu den Trainingsdaten. Macht die Geste geschwindigkeits-
     und längeninvariant (gleich viele, gleichmäßig verteilte Punkte pro Geste).
     """
-    points = np.asarray(points, dtype=float)
-    if len(points) < 2:
-        return np.repeat(points[:1], n, axis=0) if len(points) else points
-    seg = np.sqrt((np.diff(points, axis=0) ** 2).sum(axis=1))
-    dist = np.concatenate([[0.0], np.cumsum(seg)])
-    if dist[-1] == 0:
-        return np.repeat(points[:1], n, axis=0)
-    u = dist / dist[-1]
-    t = np.linspace(0.0, 1.0, n)
-    x = np.interp(t, u, points[:, 0])
-    y = np.interp(t, u, points[:, 1])
-    return np.stack([x, y], axis=1)
+    return _resample_trajectory(points, n)
 
 
 class Preprocessor(Module):
@@ -225,13 +217,7 @@ class Preprocessor(Module):
         if gc.get("finished") and len(self.trajectory) >= self.min_points:
             points = np.array(self.trajectory)
             points = resample_trajectory(points, self.n_resample)
-            # Mitte von der Bounding Box nehmen, nicht den Mittelwert -> Buchstabe
-            # landet immer an der gleichen Stelle, egal wo er gemalt wurde
-            center = (points.min(axis=0) + points.max(axis=0)) / 2
-            points = points - center
-            scale = np.abs(points).max()
-            if scale > 0:
-                points = points / scale
+            points = _center_and_scale(points)
             return {self.outputSignal: points}
 
         return {self.outputSignal: None}
