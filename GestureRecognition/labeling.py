@@ -110,19 +110,19 @@ def data_labeling(times: int, label: str):
                            "(deviceIndex in config.yml prüfen).")
 
     window = f"Labeling: {label}"   # Titel des Anzeige-Fensters
-    state = "idle"              # idle -> recording -> review
-    track = []                  # gesammelte Fingerpositionen der aktuellen Aufnahme
+    state = "idle" # idle -> recording -> review
+    track = []# gesammelte Fingerpositionen der aktuellen Aufnahme
     last_gesture, streak = None, 0   # fürr die Gesten-Entprellung (siehe unten)
-    saved = 0                        # Zähler: wie viele Aufnahmen schon gespeichert
+    saved = 0 # Zähler: wie viele Aufnahmen schon gespeichert
 
     try:
         # Hauptschleife: läuft bis genug Aufnahmen gespeichert sind
         while saved < times:
-            ok, frame = cap.read()   #ein Bild von der Webcam holen
+            ok, frame = cap.read() #ein Bild von der Webcam holen
             if not ok:
                 continue
             if cam["flip"]:
-                frame = cv2.flip(frame, 1)   #spiegeln, wirkt wie ein Spiegel
+                frame = cv2.flip(frame, 1)#spiegeln, wirkt wie ein Spiegel
             h, w = frame.shape[:2]
 
             # MediaPipe erwartet RGB
@@ -166,7 +166,7 @@ def data_labeling(times: int, label: str):
 
             # im Review-Zustand auf Tastendruck warten
             if state == "review":
-                if key == ord("s"):   # s = speichern
+                if key == ord("s"): # s = speichern
                     if len(track) < MIN_SEQUENCE_LEN:
                         print(f"-> zu kurz ({len(track)} Punkte), nicht gespeichert.")
                     else:
