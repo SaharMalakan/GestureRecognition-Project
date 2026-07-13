@@ -271,6 +271,18 @@ def resample_trajectory(points, n=N_RESAMPLE):
     return np.stack([x, y], axis=1)
 
 
+def _center_and_scale(points):
+    """Bounding-Box-Mitte abziehen und auf [-1, 1] skalieren (siehe normalize_trajectory)."""
+    # Mitte von der Bounding Box nehmen, nicht den Mittelwert -> Buchstabe
+    # landet immer an der gleichen Stelle, egal wo er gemalt wurde
+    center = (points.min(axis=0) + points.max(axis=0)) / 2
+    points = points - center
+    scale = np.abs(points).max()
+    if scale > 0:
+        points = points / scale
+    return points
+
+
 def normalize_trajectory(points):
     """
     Trajektorie normalisieren - genau wie im Preprocessor (modules/preprocessor.py).
@@ -282,17 +294,10 @@ def normalize_trajectory(points):
     """
     points = np.asarray(points, dtype=float)
     points = resample_trajectory(points, N_RESAMPLE)   # NEU: erst auf feste Länge bringen
-    # Mitte von der Bounding Box nehmen, nicht den Mittelwert -> Buchstabe
-    # landet immer an der gleichen Stelle, egal wo er gemalt wurde
-    center = (points.min(axis=0) + points.max(axis=0)) / 2
-    points = points - center
-    scale = np.abs(points).max()
-    if scale > 0:
-        points = points / scale
-    return points
+    return _center_and_scale(points)
 
 
-def _extract_finger_track(recording_path: Path, finger_idx: int = FINGER_IDX):
+def _extract_finger_track(recording_path: Path):
     """Liest die rohe (T, 2)-Fingerspur aus einer Aufnahme."""
     with open(recording_path, "rb") as f:
         data = pickle.load(f)

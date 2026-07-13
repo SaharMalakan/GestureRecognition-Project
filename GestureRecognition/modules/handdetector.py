@@ -26,8 +26,6 @@ def draw_hand_landmarks(hand_landmarks, galy: GALY):
         "pinky_finger":  {"color": bgr("#FF00FF")},
         "palm":          {"color": bgr("#C8C8C8")},
     }
-    x = np.inf
-    y = np.inf
     for key in lm.keys():
         pts = set()
         for conn in getattr(mp_hand, f"HAND_{key.upper()}_CONNECTIONS"):
@@ -35,8 +33,6 @@ def draw_hand_landmarks(hand_landmarks, galy: GALY):
                     hand_landmarks[conn.start].y)
             end = (hand_landmarks[conn.end].x,
                 hand_landmarks[conn.end].y)
-            x = min(x, start[0], end[0])
-            y = min(y, start[1], end[1])
             galy.line(start, end, lm[key]["color"], 2)
             pts.update([conn.start, conn.end])
         for pt in pts:
