@@ -13,11 +13,11 @@ class HMMClassifier:
     Grundidee (Vorlesung):
     ----------------------
     - Beobachtung Y = die 2D-Trajektorienpunkte (x, y) der Fingerspitze.
-    - Versteckte Zustände = Phasen der Geste (z. B. Anfang / Mitte / Ende).
-    - Pro Klasse wird EIN eigenes HMM trainiert (hmmlearn.GaussianHMM).
+    - Versteckte Zustände = Phasen der Geste (zB Anfang / Mitte / Ende)
+    - Pro Klasse wird EIN eigenes HMM trainiert (hmmlearn.GaussianHMM)
     - ``fit`` trainiert jedes HMM: hmmlearn schätzt aus den Beispiel-Sequenzen
-      die Uebergangswahrscheinlichkeit p(x_t | x_{t-1}) (Zustand -> Zustand) und
-      die Emissionswahrscheinlichkeit p(y_t | x_t) (Zustand -> Beobachtung).
+      die bergangswahrscheinlichkeit p(x_t | x_{t-1}) (Zustand -> Zustand) und
+      die Emissionswahrscheinlichkeit p(y_t | x_t) (Zustand -> Beobachtung)
     - Eine neue Sequenz wird unter JEDEM Klassenmodell bewertet: der Score ist
       die Log-Likelihood log P(Y | Modell), berechnet vom Forward-Algorithmus
       (hmmlearn ``model.score``).
@@ -44,24 +44,24 @@ class HMMClassifier:
         self.n_states = n_states
         self.n_iter = n_iter
         self.covariance_type = covariance_type   # "diag" = robust, je Zustand 2 Varianzen
-        self.random_state = random_state         # feste Seed -> reproduzierbar
-        self.models = {}                         # label -> trainiertes HMM (oder None)
-        self.labels = []                         # feste, sortierte Klassenreihenfolge
+        self.random_state = random_state  # feste Seed -> reproduzierbar
+        self.models = {}   # label -> trainiertes HMM (oder None)
+        self.labels = [] # feste, sortierte Klassenreihenfolge
 
     def fit(self, dataset):
         """Trainiert pro Klasse ein GaussianHMM. dataset = {label: [(T,2)-Arrays]}."""
-        # Klassen in sortierter Reihenfolge -> konsistent mit evaluate_classifier.
+        # Klassen in sortierter Reihenfolge -> konsistent mit evaluate_classifier
         for label in sorted(dataset.keys()):
-            # Jede Sequenz sauber als float-Array (T,2) -> hmmlearn rechnet mit float.
+            # Jede Sequenz sauber als float-Array (T,2) -> hmmlearn rechnet mit float
             seqs = [np.asarray(s, dtype=float) for s in dataset[label]]
 
-            # Alle Sequenzen einer Klasse untereinander stapeln: X hat (sum_T, 2).
+            # Alle Sequenzen einer Klasse untereinander stapeln: X hat (sum_T, 2)
             X = np.vstack(seqs)
             # lengths in DERSELBEN Reihenfolge -> sum(lengths) == len(X). So weiss
-            # hmmlearn, wo eine Sequenz endet (keine falschen Übergänge dazwischen).
+            # hmmlearn, wo eine Sequenz endet (keine falschen Übergänge dazwischen)
             lengths = [len(s) for s in seqs]
 
-            # n_states darf nie länger als die kürzeste Sequenz dieser Klasse sein.
+            # n_states darf nie länger als die kürzeste Sequenz dieser Klasse sein
             n = min(self.n_states, min(lengths))
 
             model = GaussianHMM(
@@ -71,14 +71,14 @@ class HMMClassifier:
                 random_state=self.random_state,
             )
             try:
-                # ConvergenceWarning u. a. von hmmlearn unterdrücken -> saubere Konsole.
+                # ConvergenceWarning u. a.von hmmlearn unterdrücken -> saubere Konsole
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    # hmmlearn schätzt die Modell-Parameter (Übergänge + Emissionen) aus den Daten.
+                    # hmmlearn schätzt die Modell-Parameter (Übergänge + Emissionen) aus den Daten
                     model.fit(X, lengths)
                 self.models[label] = model
             except Exception:
-                # Training fehlgeschlagen (z. B. singuläre Kovarianz) -> None.
+                # Training fehlgeschlagen (z. B. singuläre Kovarianz) -> None
                 # Diese Klasse bekommt später Score -inf und wird nie gewählt.
                 print(f"Warnung: Modell für Klasse '{label}' konnte nicht trainiert werden.")
                 self.models[label] = None
@@ -100,10 +100,10 @@ class HMMClassifier:
                 try:
                     # Forward-Algorithmus: s = log P(Y | Modell).
                     s = model.score(seq)
-                    if np.isfinite(s):       # NaN / -inf nicht übernehmen
+                    if np.isfinite(s):# NaN / -inf nicht übernehmen
                         scores[i, j] = s
                 except Exception:
-                    pass  # Score nicht berechenbar -> bleibt -inf
+                    pass# Score nicht berechenbar -> bleibt -inf
         return scores
 
     def predict(self, sequences):
@@ -128,14 +128,14 @@ class HMMClassifier:
         ODER das neue Modell - nie eine halb geschriebene Datei.
         """
         path = str(path)
-        tmp = path + ".tmp"           # erst in Temp-Datei schreiben
+        tmp = path + ".tmp"# erst in Temp-Datei schreiben
         with open(tmp, "wb") as f:
-            pickle.dump(self, f)     # ganzes Objekt serialisieren
-        os.replace(tmp, path)         # dann atomar umbenennen
+            pickle.dump(self, f)# ganzes Objekt serialisieren
+        os.replace(tmp, path) # dann atomar umbenennen
 
     @classmethod
     def load(cls, path):
-        """Lädt eine fertige HMMClassifier-Instanz (z. B. für den Live-Modus)."""
+        """Lädt eine fertige HMMClassifier-Instanz (zB für den Live-Modus)."""
         with open(path, "rb") as f:
             return pickle.load(f)
 

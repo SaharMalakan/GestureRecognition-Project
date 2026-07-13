@@ -13,12 +13,12 @@ def run(parser: argparse.ArgumentParser):
     # Die Pipeline: Reihenfolge = Reihenfolge der Ausführung pro Frame
     modules = [
         ConfigParser(parser),   # liest config.yml + Kommandozeile
-        Webcam(),                # liefert das Kamerabild
-        HandDetector(),          # erkennt Hand + Geste (MediaPipe)
-        GestureController(),     # steuert Start/Stop der Aufnahme
-        TrailMarker(),           # zeichnet die gelbe Spur
-        Preprocessor(),          # sammelt/normalisiert die Trajektorie
-        HMMModule(),             # klassifiziert den Buchstaben
+        Webcam(),# liefert das Kamerabild
+        HandDetector(),# erkennt Hand + Geste (MediaPipe)
+        GestureController(),# steuert Start/Stop der Aufnahme
+        TrailMarker(),   # zeichnet die gelbe Spur
+        Preprocessor(), # sammelt/normalisiert die Trajektorie
+        HMMModule(),  # klassifiziert den Buchstaben
     ]
     engine = Engine(modules=modules, signals={})
     engine.run({})  # startet die Endlosschleife (ein Schritt pro Kamera-Frame)

@@ -10,24 +10,24 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = PROJECT_ROOT / "data" / "raw"              # Rohdaten (unnormalisiert)
 DATASET_PATH = PROJECT_ROOT / "data" / "dataset.pkl"  # fertiger, normalisierter Datensatz
 
-SEQUENCES_PER_CLASS = None   # None = ALLE Aufnahmen pro Klasse überlagern (z. B. alle 30 für "A")
+SEQUENCES_PER_CLASS = None   # None = ALLE Aufnahmen pro Klasse überlagern (zB alle 30 für "A")
 
 
 def _load_raw_tracks(label_dir: Path):
     """Lädt alle Rohtrajektorien aus einem Label-Ordner."""
     tracks = []
-    for f in sorted(label_dir.glob("*.pickle")):   # jede Aufnahme-Datei durchgehen
+    for f in sorted(label_dir.glob("*.pickle")):# jede Aufnahme-Datei durchgehen
         with open(f, "rb") as fh:
             data = pickle.load(fh)
         track = np.asarray(data["track"] if isinstance(data, dict) else data, dtype=float)
-        if len(track) >= 8:   # zu kurze Aufnahmen ignorieren
+        if len(track) >= 8:# zu kurze Aufnahmen ignorieren
             tracks.append(track)
     return tracks
 
 
 def visualize_dataset():
     """Zeigt Trajektorien des Datensatzes – mehrere Beispiele pro Klasse."""
-    label_dirs = sorted([d for d in RAW_DIR.iterdir() if d.is_dir()])   # ein Ordner pro Klasse
+    label_dirs = sorted([d for d in RAW_DIR.iterdir() if d.is_dir()])# ein Ordner pro Klasse
     if not label_dirs:
         print("Keine Daten gefunden in", RAW_DIR)
         return
@@ -40,20 +40,20 @@ def visualize_dataset():
     axes = np.array(axes).flatten()   # 2D-Grid -> einfache Liste von Achsen
 
     for i, label_dir in enumerate(label_dirs):
-        ax = axes[i]   # ein Diagramm für diese Klasse
+        ax = axes[i]  # ein Diagramm für diese Klasse
         tracks = _load_raw_tracks(label_dir)
         label = label_dir.name
 
         ax.set_title(f"{label}  ({len(tracks)} Aufn.)")
         ax.set_xlim(0, 1)
-        ax.set_ylim(1, 0)          # y umgedreht, weil Bild-Koordinaten oben=0 sind
+        ax.set_ylim(1, 0)    # y umgedreht, weil Bild-Koordinaten oben=0 sind
         ax.set_aspect("equal")
         ax.axis("off")
 
         shown = tracks if SEQUENCES_PER_CLASS is None else tracks[:SEQUENCES_PER_CLASS]
         for track in shown:
             ax.plot(track[:, 0], track[:, 1], alpha=0.35, linewidth=1.0)  # Spur
-            ax.plot(track[0, 0], track[0, 1], "go", markersize=3)          # grün = Start
+            ax.plot(track[0, 0], track[0, 1], "go", markersize=3)          # grünn = Start
             ax.plot(track[-1, 0], track[-1, 1], "rs", markersize=3)        # rot = Ende
 
     # ungenutzte Diagramm-Felder ausblenden (falls Klassenzahl kein volles Raster ergibt)
@@ -74,7 +74,7 @@ def replay_recordings():
         return
 
     print(f"Klassen: {[d.name for d in label_dirs]}")
-    print("Fenster schliessen, um zur nächsten Klasse zu wechseln.\n")
+    print("Fenster schliessen, um zur naechsten Klasse zu wechseln.\n")
 
     for label_dir in label_dirs:
         files = sorted(label_dir.glob("*.pickle"))
@@ -128,7 +128,7 @@ def evaluate_classifier():
                 continue
             tracks = _load_raw_tracks(d)
             if tracks:
-                dataset[d.name] = [normalize_trajectory(t) for t in tracks]   # wie beim Training
+                dataset[d.name] = [normalize_trajectory(t) for t in tracks] # wie beim Training
 
     if not dataset:
         print("Keine Daten gefunden.")
@@ -137,7 +137,7 @@ def evaluate_classifier():
     # 80/20 Train-Test-Split (pro Klasse einzeln, nicht zufällig gemischt)
     train_data, test_data = {}, {}
     for label, seqs in dataset.items():
-        split = max(1, int(len(seqs) * 0.8))   # 80% Grenze, mind. 1 Trainings-Sequenz
+        split = max(1, int(len(seqs) * 0.8)) # 80% Grenze, mind. 1 Trainings-Sequenz
         train_data[label] = seqs[:split]
         test_data[label] = seqs[split:]
 
@@ -173,11 +173,11 @@ def evaluate_classifier():
     idx = {lbl: i for i, lbl in enumerate(labels)}   # Label-Name -> Zeilen/Spalten-Index
     for t, p in zip(y_true, y_pred):
         if p in idx:
-            cm[idx[t]][idx[p]] += 1   # ein Treffer mehr in dieser Zelle
+            cm[idx[t]][idx[p]] += 1# ein Treffer mehr in dieser Zelle
 
     # Confusion Matrix als Bild plotten
     fig, ax = plt.subplots(figsize=(max(6, n), max(5, n - 1)))
-    im = ax.imshow(cm, cmap="Blues")   # je dunkler, desto mehr Treffer
+    im = ax.imshow(cm, cmap="Blues")# je dunkler, desto mehr Treffer
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
     ax.set_xticklabels(labels, fontsize=8)
