@@ -18,7 +18,7 @@ class GestureController(Module):
                      (Signal zum Klassifizieren der fertigen Trajektorie).
     """
 
-    START_GESTURE = "Pointing_Up"   # Name kommt so vom MediaPipe Gesture Recognizer
+    START_GESTURE = "Pointing_Up" # Name kommt so vom MediaPipe Gesture Recognizer
     STOP_GESTURE = "Closed_Fist"
 
     def __init__(self, outputSignal="gesturecontroller"):
@@ -33,9 +33,9 @@ class GestureController(Module):
         config = data.get("config", {})
         # so viele Frames muss die Geste halten, bevor sie zählt (gegen Flackern)
         self.trigger_frames = get_nested_key("gesturecontroller.trigger_frames", config, default=3)
-        self.state = "idle"          # idle = wartet auf Start-Geste
-        self.last_gesture = None     # letzte gesehene Geste (für Entprellung)
-        self.streak = 0              # wie viele Frames in Folge gleiche Geste
+        self.state = "idle"  # idle = wartet auf Start-Geste
+        self.last_gesture = None  # letzte gesehene Geste (für Entprellung)
+        self.streak = 0  # wie viele Frames in Folge gleiche Geste
         return {}
 
     def step(self, data):
