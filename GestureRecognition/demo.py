@@ -17,7 +17,7 @@ def run(parser: argparse.ArgumentParser):
         HMMModule(),
     ]
     engine = Engine(modules=modules, signals={})
-    signals = engine.run({})
+    engine.run({})
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("GestureRecognition")
