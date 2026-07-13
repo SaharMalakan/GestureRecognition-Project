@@ -1,3 +1,4 @@
+import os
 import pickle
 import warnings
 
@@ -120,9 +121,17 @@ class HMMClassifier:
         return out
 
     def save(self, path):
-        """Speichert das ganze Objekt (Klassen + Modelle + Hyperparameter)."""
-        with open(path, "wb") as f:
+        """Speichert das ganze Objekt (Klassen + Modelle + Hyperparameter).
+
+        Atomar (erst in eine .tmp schreiben, dann os.replace): so sieht ein
+        gleichzeitig laufender Hot-Reload im HMMModule immer entweder das alte
+        ODER das neue Modell - nie eine halb geschriebene Datei.
+        """
+        path = str(path)
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as f:
             pickle.dump(self, f)
+        os.replace(tmp, path)
 
     @classmethod
     def load(cls, path):

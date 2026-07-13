@@ -79,8 +79,8 @@ class HMMModule(Module):
         try:
             self._load_model()
             print(f"[hiddenmarkov] Modell neu geladen: {self.model_path}")
-        except (OSError, pickle.PickleError):
-            pass  # retrain.py schreibt evtl. gerade noch - beim nächsten Frame erneut versuchen
+        except Exception:
+            pass  # halb geschriebene/kaputte Datei -> altes Modell behalten, naechster Frame erneut
 
     def step(self, data):
         """Pro Frame: bei fertiger Trajektorie klassifizieren, Ergebnis anzeigen.
