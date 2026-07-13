@@ -135,7 +135,10 @@ class HandDetector(Module):
         # 3. Visualisierung aufbauen.
         height, width = frame.shape[:2]
         galy = GALY()
-        galy.canvas("main", (width, height), (0, 0, 0))  # Zeichenfläche in Bildgröße
+        # Gleicher Canvas-Name wie im Webcam-Modul ("Main"), sonst entsteht ein
+        # zweites, getrenntes Fenster und Hand/Trail landen auf verschiedenen
+        # Canvases (Trail waere dann im Hauptfenster unsichtbar).
+        galy.canvas("Main", (width, height), (0, 0, 0))  # Zeichenfläche in Bildgröße
         galy.blit("webcam", (0, 0))                       # Kamerabild als Hintergrund
         galy.layer("landmarks")                           # eigene Ebene für die Hand
 
