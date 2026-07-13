@@ -225,7 +225,9 @@ class Preprocessor(Module):
         if gc.get("finished") and len(self.trajectory) >= self.min_points:
             points = np.array(self.trajectory)
             points = resample_trajectory(points, self.n_resample)
-            center = points.mean(axis=0)
+            # Mitte von der Bounding Box nehmen, nicht den Mittelwert -> Buchstabe
+            # landet immer an der gleichen Stelle, egal wo er gemalt wurde
+            center = (points.min(axis=0) + points.max(axis=0)) / 2
             points = points - center
             scale = np.abs(points).max()
             if scale > 0:

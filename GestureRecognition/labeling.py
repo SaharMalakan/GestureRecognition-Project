@@ -282,7 +282,9 @@ def normalize_trajectory(points):
     """
     points = np.asarray(points, dtype=float)
     points = resample_trajectory(points, N_RESAMPLE)   # NEU: erst auf feste Länge bringen
-    center = points.mean(axis=0)
+    # Mitte von der Bounding Box nehmen, nicht den Mittelwert -> Buchstabe
+    # landet immer an der gleichen Stelle, egal wo er gemalt wurde
+    center = (points.min(axis=0) + points.max(axis=0)) / 2
     points = points - center
     scale = np.abs(points).max()
     if scale > 0:
