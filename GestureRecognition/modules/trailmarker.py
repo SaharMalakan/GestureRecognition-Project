@@ -1,5 +1,6 @@
 from SignalHub import GALY, Module, get_nested_key
 from collections import deque
+import numpy as np
 
 class TrailMarker(Module):
     """
@@ -108,6 +109,10 @@ class TrailMarker(Module):
         trail_length = get_nested_key("trailmarker.trail_length", config, default=300)
         self.trail = deque(maxlen=trail_length)
         self.lost_frames = 0
+        # Fuer die Skalierung der normalisierten (0..1) Finger-Koordinaten auf
+        # Pixel - genau wie im HandDetector (siehe eigene Layer-Mapping unten).
+        self.width = get_nested_key("webcam.width", config, default=1280)
+        self.height = get_nested_key("webcam.height", config, default=720)
         return {}
 
     def step(self, data):
@@ -164,6 +169,16 @@ class TrailMarker(Module):
             ``return { ..., "galy": galy}``
         """
         galy = GALY()
+        # Eigene Ebene mit eigenem Pixel-Mapping - unabhaengig davon, ob/welche
+        # andere Module ihre Ebene gerade gesetzt haben. Ohne das wuerden die
+        # normalisierten (0..1) Koordinaten ungeskaliert (~1 Pixel) gezeichnet
+        # und die Spur waere praktisch unsichtbar. "alwaysVisible" heisst
+        # ausserdem, dass die Spur nicht ueber das Layer-Menu ausgeblendet
+        # werden kann.
+        galy.layer("trailmarker", alwaysVisible=True)
+        galy.set_layer_affine_mapping(np.array([[self.width, 0, 0],
+                                                 [0, self.height, 0]], dtype=float))
+
         gc = data.get("gesturecontroller", {})
 
         if gc.get("reset"):
@@ -189,6 +204,8 @@ class TrailMarker(Module):
         trail_list = list(self.trail)
         for i in range(1, len(trail_list)):
             galy.line(trail_list[i - 1], trail_list[i], (0, 255, 255), 2)
+        if trail_list:
+            galy.circle(trail_list[-1], 6, (0, 255, 255), -1)
 
         return {"galy": galy}
 
