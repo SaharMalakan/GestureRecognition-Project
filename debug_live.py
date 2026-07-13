@@ -1,5 +1,5 @@
 """
-TEMP-DEBUG — spurlos loeschbar.
+TEMP-DEBUG — spurlos löschbar.
 
 Bildet den LIVE-Pfad der Demo (main.py) nach, um zu sehen, WAS beim HMM
 ankommt: dieselbe Kamera-Aufbereitung (resize 640x360 + flip), derselbe
@@ -10,15 +10,15 @@ und dasselbe Modell (data/hmm.pkl).
 Nach jedem gemalten Buchstaben:
   - Vorhersage auf der Spur, ihrer SPIEGELUNG und ihrer UMKEHRUNG (Richtung)
   - ein Vergleichsbild  debug_live_<n>.png  (deine Spur vs. Trainings-Referenz)
-  - alles zusaetzlich in  debug_live.pkl  gespeichert (fuer Detailanalyse)
+  - alles zusätzlich in  debug_live.pkl  gespeichert (für Detailanalyse)
 
 Aufruf:   python debug_live.py
 Steuerung: Zeigefinger hoch = Start, Faust = Stopp, Taste q/ESC = beenden.
 
-SPURLOS LOESCHEN:
+SPURLOS LÖSCHEN:
   rm debug_live.py debug_live.pkl debug_live_*.png     (Git Bash)
   del debug_live.py debug_live.pkl debug_live_*.png     (cmd)
-Es wurde KEINE andere Datei veraendert.
+Es wurde KEINE andere Datei verändert.
 """
 import pickle
 import numpy as np
@@ -71,10 +71,10 @@ def save_plot(idx, norm, pred_label, ref):
         r = ref[pred_label]
         ax.plot(r[:, 0], r[:, 1], color="0.75", lw=4, label=f"Training '{pred_label}'")
     ax.plot(norm[:, 0], norm[:, 1], "b-", lw=2, label="deine Live-Spur")
-    ax.plot(norm[0, 0], norm[0, 1], "go", ms=9)   # Start gruen
+    ax.plot(norm[0, 0], norm[0, 1], "go", ms=9)   # Start grün
     ax.plot(norm[-1, 0], norm[-1, 1], "rs", ms=9)  # Ende rot
     ax.set_aspect("equal"); ax.invert_yaxis(); ax.legend(fontsize=8)
-    ax.set_title(f"#{idx}: erkannt als '{pred_label}'  (gruen=Start, rot=Ende)")
+    ax.set_title(f"#{idx}: erkannt als '{pred_label}'  (grün=Start, rot=Ende)")
     out = f"debug_live_{idx}.png"
     plt.tight_layout(); plt.savefig(out, dpi=120); plt.close(fig)
     return out
@@ -98,7 +98,7 @@ def main():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, cam["width"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cam["height"])
     if not cap.isOpened():
-        print("Webcam konnte nicht geoeffnet werden (deviceIndex in config.yml pruefen).")
+        print("Webcam konnte nicht geöffnet werden (deviceIndex in config.yml prüfen).")
         return
 
     state = "idle"
@@ -120,7 +120,7 @@ def main():
             ok, frame = cap.read()
             if not ok:
                 continue
-            # EXAKT wie die Demo-Webcam: erst auf Zielgroesse, dann flip
+            # EXAKT wie die Demo-Webcam: erst auf Zielgrösse, dann flip
             frame = cv2.resize(frame, (cam["width"], cam["height"]))
             if cam["flip"]:
                 frame = cv2.flip(frame, 1)

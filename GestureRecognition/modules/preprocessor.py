@@ -120,17 +120,17 @@ class Preprocessor(Module):
             Ein leeres Dictionary.
         """
         config = data.get("config", {})
-        self.finger_idx = get_nested_key("preprocessor.finger_idx", config, default=8)
+        self.finger_idx = get_nested_key("preprocessor.finger_idx", config, default=8)   # 8 = Zeigefinger-Spitze
         self.max_lost = get_nested_key("preprocessor.max_lost", config, default=10)
-        # Gleicher Schwellwert wie labeling.MIN_SEQUENCE_LEN - kuerzere
-        # Aufnahmen wuerden auch beim Trainingsdatensatz verworfen.
+        # Gleicher Schwellwert wie labeling.MIN_SEQUENCE_LEN - kürzere
+        # Aufnahmen würden auch beim Trainingsdatensatz verworfen.
         self.min_points = get_nested_key("preprocessor.min_points", config, default=8)
-        self.n_resample = get_nested_key("preprocessor.n_resample", config, default=32)
-        # Keine feste Laenge/Deque mehr: die Trajektorie wird bei Start (ueber
-        # GestureController) geleert und waechst bis zum Stop - genau wie beim
-        # Labeling, wo auch die GANZE Aufnahme zwischen Start und Stop zaehlt.
-        self.trajectory = []
-        self.lost_frames = 0
+        self.n_resample = get_nested_key("preprocessor.n_resample", config, default=32)   # Ziel-Punktzahl
+        # Keine feste Länge/Deque mehr: die Trajektorie wird bei Start (über
+        # GestureController) geleert und wächst bis zum Stop - genau wie beim
+        # Labeling, wo auch die GANZE Aufnahme zwischen Start und Stop zählt.
+        self.trajectory = []   # gesammelte (x, y) Punkte der aktuellen Aufnahme
+        self.lost_frames = 0   # Zähler: Frames ohne erkannte Hand
         return {}
 
     def step(self, data):
@@ -191,24 +191,24 @@ class Preprocessor(Module):
 
             ``return {outputSignal: trajectory}``
         """
-        gc = data.get("gesturecontroller", {})
+        gc = data.get("gesturecontroller", {})   # Zustand von GestureController
 
         if gc.get("reset"):
-            self.trajectory = []
+            self.trajectory = []   # neue Aufnahme -> alte Punkte weg
             self.lost_frames = 0
 
-        # Nur waehrend der Aufnahme (Zeigefinger hoch) Punkte sammeln - der
+        # Nur während der Aufnahme (Zeigefinger hoch) Punkte sammeln - der
         # Faust-Stop friert die Trajektorie ein, damit sie unten normalisiert
-        # werden kann, ohne dass die letzten (Faust-)Frames sie verfaelschen.
+        # werden kann, ohne dass die letzten (Faust-)Frames sie verfälschen.
         if gc.get("recording"):
             detector = data.get("detector")
             if not detector or not detector.hand_landmarks:
                 self.lost_frames += 1
                 if self.lost_frames > self.max_lost:
-                    self.trajectory = []
+                    self.trajectory = []   # Hand zu lange weg -> verwerfen
             else:
                 self.lost_frames = 0
-                lm = detector.hand_landmarks[0][self.finger_idx]
+                lm = detector.hand_landmarks[0][self.finger_idx]   # Fingerspitze
                 self.trajectory.append((lm.x, lm.y))
 
         # Erst wenn die Aufnahme gerade gestoppt wurde (Faust erkannt), wird
@@ -216,11 +216,11 @@ class Preprocessor(Module):
         # labeling.normalize_trajectory (Training == Live!).
         if gc.get("finished") and len(self.trajectory) >= self.min_points:
             points = np.array(self.trajectory)
-            points = resample_trajectory(points, self.n_resample)
-            points = _center_and_scale(points)
+            points = resample_trajectory(points, self.n_resample)   # feste Punktzahl
+            points = _center_and_scale(points)                       # zentrieren + skalieren
             return {self.outputSignal: points}
 
-        return {self.outputSignal: None}
+        return {self.outputSignal: None}   # noch nicht fertig -> nichts zu klassifizieren
 
     def stop(self, data):
         """

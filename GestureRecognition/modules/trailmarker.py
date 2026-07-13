@@ -102,14 +102,14 @@ class TrailMarker(Module):
             Ein leeres Dictionary.
         """
         config = data.get("config", {})
-        self.finger_idx = get_nested_key("trailmarker.finger_idx", config, default=8)
-        self.max_lost = get_nested_key("trailmarker.max_lost", config, default=10)
-        # Gross genug fuer einen ganzen "gemalten" Buchstaben (Trail wird bei
-        # jedem neuen Start ueber die Geste sowieso geleert, siehe step()).
+        self.finger_idx = get_nested_key("trailmarker.finger_idx", config, default=8)   # 8 = Zeigefinger-Spitze
+        self.max_lost = get_nested_key("trailmarker.max_lost", config, default=10)      # Toleranz bei Hand-Verlust
+        # Gross genug für einen ganzen "gemalten" Buchstaben (Trail wird bei
+        # jedem neuen Start über die Geste sowieso geleert, siehe step()).
         trail_length = get_nested_key("trailmarker.trail_length", config, default=300)
-        self.trail = deque(maxlen=trail_length)
-        self.lost_frames = 0
-        # Fuer die Skalierung der normalisierten (0..1) Finger-Koordinaten auf
+        self.trail = deque(maxlen=trail_length)   # speichert die letzten Fingerpositionen
+        self.lost_frames = 0   # Zähler: wie viele Frames am Stück keine Hand erkannt
+        # Für die Skalierung der normalisierten (0..1) Finger-Koordinaten auf
         # Pixel - genau wie im HandDetector (siehe eigene Layer-Mapping unten).
         self.width = get_nested_key("webcam.width", config, default=1280)
         self.height = get_nested_key("webcam.height", config, default=720)
@@ -169,23 +169,23 @@ class TrailMarker(Module):
             ``return { ..., "galy": galy}``
         """
         galy = GALY()
-        # Eigene Ebene mit eigenem Pixel-Mapping - unabhaengig davon, ob/welche
-        # andere Module ihre Ebene gerade gesetzt haben. Ohne das wuerden die
+        # Eigene Ebene mit eigenem Pixel-Mapping - unabhängig davon, ob/welche
+        # andere Module ihre Ebene gerade gesetzt haben. Ohne das würden die
         # normalisierten (0..1) Koordinaten ungeskaliert (~1 Pixel) gezeichnet
-        # und die Spur waere praktisch unsichtbar. "alwaysVisible" heisst
-        # ausserdem, dass die Spur nicht ueber das Layer-Menu ausgeblendet
+        # und die Spur wäre praktisch unsichtbar. "alwaysVisible" heisst
+        # ausserdem, dass die Spur nicht über das Layer-Menu ausgeblendet
         # werden kann.
         galy.layer("trailmarker", alwaysVisible=True)
         galy.set_layer_affine_mapping(np.array([[self.width, 0, 0],
                                                  [0, self.height, 0]], dtype=float))
 
-        gc = data.get("gesturecontroller", {})
+        gc = data.get("gesturecontroller", {})   # Zustand von GestureController
 
         if gc.get("reset"):
-            self.trail.clear()
+            self.trail.clear()   # neue Aufnahme -> alte Spur weg
 
-        # Nur waehrend der Aufnahme (Zeigefinger hoch, siehe GestureController)
-        # ueberhaupt Punkte sammeln/zeichnen - genau wie beim Labeling-Tool.
+        # Nur während der Aufnahme (Zeigefinger hoch, siehe GestureController)
+        # überhaupt Punkte sammeln/zeichnen - genau wie beim Labeling-Tool.
         if not gc.get("recording"):
             return {"galy": galy}
 
@@ -194,18 +194,18 @@ class TrailMarker(Module):
         if not detector or not detector.hand_landmarks:
             self.lost_frames += 1
             if self.lost_frames > self.max_lost:
-                self.trail.clear()
+                self.trail.clear()   # Hand zu lange weg -> Spur verwerfen
             return {"galy": galy}
 
         self.lost_frames = 0
-        lm = detector.hand_landmarks[0][self.finger_idx]
-        self.trail.append((lm.x, lm.y))
+        lm = detector.hand_landmarks[0][self.finger_idx]   # Position der Fingerspitze
+        self.trail.append((lm.x, lm.y))   # Punkt zur Spur hinzufügen
 
         trail_list = list(self.trail)
         for i in range(1, len(trail_list)):
-            galy.line(trail_list[i - 1], trail_list[i], (0, 255, 255), 2)
+            galy.line(trail_list[i - 1], trail_list[i], (0, 255, 255), 2)   # gelbe Linie
         if trail_list:
-            galy.circle(trail_list[-1], 6, (0, 255, 255), -1)
+            galy.circle(trail_list[-1], 6, (0, 255, 255), -1)   # Punkt an Fingerspitze
 
         return {"galy": galy}
 

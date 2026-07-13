@@ -43,15 +43,15 @@ class HMMModule(Module):
     Fingertrajektorie (Signal "preprocessor", sonst None), wenn die Aufnahme
     per Faust gestoppt wurde, und jagt die durch unser trainiertes HMM
     (HMMClassifier). Raus kommt das Label mit dem besten Score. Damit das
-    Ergebnis nicht wie frueher jeden Frame neu berechnet wird und flackert,
-    wird es fuer ``DISPLAY_SECONDS`` gross/zentriert stehen gelassen.
+    Ergebnis nicht wie früher jeden Frame neu berechnet wird und flackert,
+    wird es für ``DISPLAY_SECONDS`` gross/zentriert stehen gelassen.
 
     Für Labels aus ``IMAGE_OVERLAYS`` wird statt des Text-Labels ein Bild
     mittig über das Kamerabild gelegt (z.B. ein Waluigi-Bild bei der
     "Waluigi"-Geste).
     """
 
-    DISPLAY_SECONDS = 2.0
+    DISPLAY_SECONDS = 2.0   # so lange bleibt das erkannte Label auf dem Bild stehen
 
     def __init__(self, outputSignal="markov", model_path="data/hmm.pkl", **kwargs):
         """Modul beim Framework anmelden.
@@ -137,28 +137,28 @@ class HMMModule(Module):
             self._load_model()
             print(f"[hiddenmarkov] Modell neu geladen: {self.model_path}")
         except Exception:
-            pass  # halb geschriebene/kaputte Datei -> altes Modell behalten, naechster Frame erneut
+            pass  # halb geschriebene/kaputte Datei -> altes Modell behalten, nächster Frame erneut
 
     def step(self, data):
         """Pro Frame: bei fertiger Trajektorie klassifizieren, Ergebnis anzeigen.
 
         ``trajectory`` ist nur in dem einen Frame nach dem Faust-Stop gesetzt
         (siehe Preprocessor) - wir klassifizieren also GENAU EINMAL pro
-        Aufnahme, statt wie frueher jeden Frame neu (das flackerte, weil sich
-        die laufend gesammelte Trajektorie staendig aenderte).
+        Aufnahme, statt wie früher jeden Frame neu (das flackerte, weil sich
+        die laufend gesammelte Trajektorie ständig änderte).
         """
-        self._reload_if_changed()
-        trajectory = data.get("preprocessor")
+        self._reload_if_changed()   # ggf. frisch trainiertes Modell nachladen
+        trajectory = data.get("preprocessor")   # None, ausser genau im Stop-Frame
 
-        if trajectory is not None:
+        if trajectory is not None:   # nur wenn gerade eine fertige Geste da ist
             # decision_function/predict wollen eigentlich eine ganze Liste von
             # Sequenzen (typisch sklearn-mäßig), wir haben aber nur eine einzige
             # -> deswegen die [trajectory] mit den eckigen Klammern
             scores = self.model.decision_function([trajectory])[0]
-            label = self.model.predict([trajectory])[0]
+            label = self.model.predict([trajectory])[0]   # bestes Label
             score = float(np.max(scores))  # höchster Score = wie sicher sich das Modell ist
             self.last_result = {"label": label, "score": score}
-            self.last_time = time.time()
+            self.last_time = time.time()   # Zeitstempel für die Anzeigedauer
 
         # eigene Ebene fürs Text-Zeichnen, NICHT die "landmarks"-Ebene vom
         # Handdetector mitbenutzen - die hat ein Affine-Mapping für 0..1
@@ -170,6 +170,7 @@ class HMMModule(Module):
         width = get_nested_key("webcam.width", config, default=640)
         height = get_nested_key("webcam.height", config, default=360)
 
+        # zeigen wir gerade ein Ergebnis an? (nur innerhalb von DISPLAY_SECONDS nach Erkennung)
         showing_result = (
             self.last_result is not None
             and (time.time() - self.last_time) < self.DISPLAY_SECONDS
