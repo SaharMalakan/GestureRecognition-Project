@@ -8,17 +8,17 @@ from mediapipe.tasks.python import vision
 
 from SignalHub import GALY, bgr, Module
 
-mp_hand = mp.tasks.vision.HandLandmarksConnections
+mp_hand = mp.tasks.vision.HandLandmarksConnections   # weiss, welche Landmarken zu welchem Finger verbunden werden
 
 
 def draw_hand_landmarks(hand_landmarks, galy: GALY):
     """Zeichnet die Knochen (Linien) und Gelenke (Kreise) einer Hand.
 
-    ``hand_landmarks`` ist die Landmarken-Liste *einer* Hand aus MediaPipe.
-    Jede Landmarke hat normalisierte Koordinaten ``.x`` und ``.y`` (Werte 0..1).
-    Pro Finger werden zuerst die Verbindungslinien und danach die Punkte gezeichnet.
+    ``hand_landmarks`` ist die Landmarken-Liste *einer* Hand aus MediaPipe
+    Jede Landmarke hat normalisierte Koordinaten ``.x`` und ``.y`` (Werte 0..1)
+    Pro Finger werden zuerst die Verbindungslinien und danach die Punkte gezeichnet
     """
-    lm = {
+    lm = {   # eine eigene Farbe pro Finger
         "thumb":         {"color": bgr("#0000FF")},
         "index_finger":  {"color": bgr("#00FF00")},
         "middle_finger": {"color": bgr("#FF0000")},
@@ -26,16 +26,17 @@ def draw_hand_landmarks(hand_landmarks, galy: GALY):
         "pinky_finger":  {"color": bgr("#FF00FF")},
         "palm":          {"color": bgr("#C8C8C8")},
     }
-    for key in lm.keys():
-        pts = set()
+    for key in lm.keys():   # einmal pro Finger (+ Handfläche)
+        pts = set()   # alle Landmark-Punkte dieses Fingers, ohne Duplikate
         for conn in getattr(mp_hand, f"HAND_{key.upper()}_CONNECTIONS"):
             start = (hand_landmarks[conn.start].x,
                     hand_landmarks[conn.start].y)
             end = (hand_landmarks[conn.end].x,
                 hand_landmarks[conn.end].y)
-            galy.line(start, end, lm[key]["color"], 2)
+            galy.line(start, end, lm[key]["color"], 2)   # Knochen als Linie
             pts.update([conn.start, conn.end])
         for pt in pts:
+            # Gelenk: erst weisser Rand, dann farbiger Punkt drüber
             galy.circle((hand_landmarks[pt].x, hand_landmarks[pt].y), 5, (255,255,255), 1)
             galy.circle((hand_landmarks[pt].x, hand_landmarks[pt].y), 4, lm[key]["color"], -1)
 
@@ -75,8 +76,8 @@ class HandDetector(Module):
             name="detector",
         )
         self.outputSignal = outputSignal
-        self.model_path = model_path
-        self.num_hands = num_hands
+        self.model_path = model_path   # Pfad zur .task-Modelldatei
+        self.num_hands = num_hands     # max. Anzahl Hände
         self.detector = None  # wird in start() geladen
 
     def start(self, data):
@@ -95,8 +96,8 @@ class HandDetector(Module):
                 "gesture_recognizer.task"
             )
 
-        # Modell als Bytes einlesen statt per Pfad zu uebergeben: MediaPipes interner
-        # Lader kommt mit Sonderzeichen im Pfad (z.B. das "ue" in "Duesseldorf") nicht
+        # Modell als Bytes einlesen statt per Pfad zu übergeben: MediaPipes interner
+        # Lader kommt mit Sonderzeichen im Pfad (z.B. das "ü" in "Düsseldorf") nicht
         # klar und wirft sonst einen FileNotFoundError, obwohl die Datei da ist.
         with open(self.model_path, "rb") as f:
             model_bytes = f.read()
@@ -119,21 +120,21 @@ class HandDetector(Module):
         """
         frame = data["webcam"]
 
-        # 1. OpenCV liefert das Bild als BGR, MediaPipe erwartet RGB.
+        # 1. OpenCV liefert das Bild als BGR, MediaPipe erwartet RGB:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
         # 2. Hand- + Gestenerkennung durchführen.
-        #    result.hand_landmarks ist eine Liste: pro erkannter Hand 21 Punkte.
-        #    result.gestures liefert zusätzlich die erkannte Geste pro Hand.
+        #    result.hand_landmarks ist eine Liste: pro erkannter Hand 21 Punkte
+        #    result.gestures liefert zusätzlich die erkannte Geste pro Hand
         result = self.detector.recognize(mp_image)
 
-        # 3. Visualisierung aufbauen.
+        # 3. Visualisierung aufbauen:
         height, width = frame.shape[:2]
         galy = GALY()
         # Gleicher Canvas-Name wie im Webcam-Modul ("Main"), sonst entsteht ein
         # zweites, getrenntes Fenster und Hand/Trail landen auf verschiedenen
-        # Canvases (Trail waere dann im Hauptfenster unsichtbar).
+        # Canvases (Trail wäre dann im Hauptfenster unsichtbar).
         galy.canvas("Main", (width, height), (0, 0, 0))  # Zeichenfläche in Bildgröße
         galy.blit("webcam", (0, 0))                       # Kamerabild als Hintergrund
         galy.layer("landmarks")                           # eigene Ebene für die Hand

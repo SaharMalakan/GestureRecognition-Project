@@ -15,12 +15,13 @@ from pathlib import Path
 from GestureRecognition.hmmclassifier import HMMClassifier
 from GestureRecognition.labeling import dataset_building, PROJECT_ROOT
 
-DATASET_PATH = PROJECT_ROOT / "data" / "dataset.pkl"
-MODEL_PATH   = PROJECT_ROOT / "data" / "hmm.pkl"
+DATASET_PATH = PROJECT_ROOT / "data" / "dataset.pkl"  # Zwischenspeicher: alle Sequenzen
+MODEL_PATH   = PROJECT_ROOT / "data" / "hmm.pkl"       # Endergebnis: das trainiertes HMM
 
 
 def retrain(dataset_path=DATASET_PATH, model_path=MODEL_PATH):
     """Baut den Datensatz neu, trainiert den Classifier und speichert ihn."""
+    # macht alle 3 Schritte auf einmal (statt sie einzeln aufzurufen)
 
     # Schritt 1: alle Rohdaten aus data/raw/ laden und normalisieren
     print("=== Schritt 1: Datensatz einlesen ===")

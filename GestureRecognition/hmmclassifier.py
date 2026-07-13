@@ -8,27 +8,27 @@ from hmmlearn.hmm import GaussianHMM
 
 class HMMClassifier:
     """
-    HMM-basierter Klassifikator fuer 2D-Gestentrajektorien.
+    HMM-basierter Klassifikator für 2D-Gestentrajektorien.
 
     Grundidee (Vorlesung):
     ----------------------
     - Beobachtung Y = die 2D-Trajektorienpunkte (x, y) der Fingerspitze.
-    - Versteckte Zustaende = Phasen der Geste (z. B. Anfang / Mitte / Ende).
-    - Pro Klasse wird EIN eigenes HMM trainiert (hmmlearn.GaussianHMM).
-    - ``fit`` trainiert jedes HMM: hmmlearn schaetzt aus den Beispiel-Sequenzen
-      die Uebergangswahrscheinlichkeit p(x_t | x_{t-1}) (Zustand -> Zustand) und
-      die Emissionswahrscheinlichkeit p(y_t | x_t) (Zustand -> Beobachtung).
+    - Versteckte Zustände = Phasen der Geste (zB Anfang / Mitte / Ende)
+    - Pro Klasse wird EIN eigenes HMM trainiert (hmmlearn.GaussianHMM)
+    - ``fit`` trainiert jedes HMM: hmmlearn schätzt aus den Beispiel-Sequenzen
+      die bergangswahrscheinlichkeit p(x_t | x_{t-1}) (Zustand -> Zustand) und
+      die Emissionswahrscheinlichkeit p(y_t | x_t) (Zustand -> Beobachtung)
     - Eine neue Sequenz wird unter JEDEM Klassenmodell bewertet: der Score ist
       die Log-Likelihood log P(Y | Modell), berechnet vom Forward-Algorithmus
       (hmmlearn ``model.score``).
-    - Klassifikation = argmax ueber die Klassen dieser Log-Likelihoods.
+    - Klassifikation = argmax über die Klassen dieser Log-Likelihoods.
 
     Datenformat:
     ------------
     - Datensatz: dict ``{ label: [seq0, seq1, ...] }``, jede Sequenz ein
       normalisiertes (T, 2)-numpy-Array (siehe ``labeling.normalize_trajectory``).
     - ``predict`` / ``decision_function`` bekommen eine LISTE von (T, 2)-Arrays.
-      Eine einzelne Live-Trajektorie wird vom Aufrufer als ``[traj]`` uebergeben.
+      Eine einzelne Live-Trajektorie wird vom Aufrufer als ``[traj]`` übergeben.
 
     Speicherung:
     ------------
@@ -37,31 +37,31 @@ class HMMClassifier:
     """
 
     def __init__(self, n_states=12, n_iter=20, covariance_type="diag", random_state=42):
-        # Hyperparameter merken. n_states = Anzahl versteckter Zustaende (Phasen).
-        # 12 Zustaende: erst nutzbar, seit die Trajektorien per Resampling feste Laenge
+        # Hyperparameter merken. n_states = Anzahl versteckter Zustände (Phasen).
+        # 12 Zustände: erst nutzbar, seit die Trajektorien per Resampling feste Länge
         # (32 Punkte) haben - vorher deckelte min(lengths) die Zustandszahl. Kreuz-
         # validiert bester Wert (~95% vs. ~72% bei n_states=5 ohne Resampling).
         self.n_states = n_states
         self.n_iter = n_iter
         self.covariance_type = covariance_type   # "diag" = robust, je Zustand 2 Varianzen
-        self.random_state = random_state         # feste Seed -> reproduzierbar
-        self.models = {}                         # label -> trainiertes HMM (oder None)
-        self.labels = []                         # feste, sortierte Klassenreihenfolge
+        self.random_state = random_state  # feste Seed -> reproduzierbar
+        self.models = {}   # label -> trainiertes HMM (oder None)
+        self.labels = [] # feste, sortierte Klassenreihenfolge
 
     def fit(self, dataset):
         """Trainiert pro Klasse ein GaussianHMM. dataset = {label: [(T,2)-Arrays]}."""
-        # Klassen in sortierter Reihenfolge -> konsistent mit evaluate_classifier.
+        # Klassen in sortierter Reihenfolge -> konsistent mit evaluate_classifier
         for label in sorted(dataset.keys()):
-            # Jede Sequenz sauber als float-Array (T,2) -> hmmlearn rechnet mit float.
+            # Jede Sequenz sauber als float-Array (T,2) -> hmmlearn rechnet mit float
             seqs = [np.asarray(s, dtype=float) for s in dataset[label]]
 
-            # Alle Sequenzen einer Klasse untereinander stapeln: X hat (sum_T, 2).
+            # Alle Sequenzen einer Klasse untereinander stapeln: X hat (sum_T, 2)
             X = np.vstack(seqs)
             # lengths in DERSELBEN Reihenfolge -> sum(lengths) == len(X). So weiss
-            # hmmlearn, wo eine Sequenz endet (keine falschen Uebergaenge dazwischen).
+            # hmmlearn, wo eine Sequenz endet (keine falschen Übergänge dazwischen)
             lengths = [len(s) for s in seqs]
 
-            # n_states darf nie laenger als die kuerzeste Sequenz dieser Klasse sein.
+            # n_states darf nie länger als die kürzeste Sequenz dieser Klasse sein
             n = min(self.n_states, min(lengths))
 
             model = GaussianHMM(
@@ -71,25 +71,25 @@ class HMMClassifier:
                 random_state=self.random_state,
             )
             try:
-                # ConvergenceWarning u. a. von hmmlearn unterdruecken -> saubere Konsole.
+                # ConvergenceWarning u. a.von hmmlearn unterdrücken -> saubere Konsole
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    # hmmlearn schaetzt die Modell-Parameter (Uebergaenge + Emissionen) aus den Daten.
+                    # hmmlearn schätzt die Modell-Parameter (Übergänge + Emissionen) aus den Daten
                     model.fit(X, lengths)
                 self.models[label] = model
             except Exception:
-                # Training fehlgeschlagen (z. B. singulaere Kovarianz) -> None.
-                # Diese Klasse bekommt spaeter Score -inf und wird nie gewaehlt.
-                print(f"Warnung: Modell fuer Klasse '{label}' konnte nicht trainiert werden.")
+                # Training fehlgeschlagen (z. B. singuläre Kovarianz) -> None
+                # Diese Klasse bekommt später Score -inf und wird nie gewählt.
+                print(f"Warnung: Modell für Klasse '{label}' konnte nicht trainiert werden.")
                 self.models[label] = None
 
-        # Feste Klassenreihenfolge fuer decision_function (Spalten) und predict.
+        # Feste Klassenreihenfolge für decision_function (Spalten) und predict.
         self.labels = sorted(self.models)
         return self
 
     def decision_function(self, sequences):
         """Log-Likelihood je Sequenz und Klasse -> Array (n_sequences, n_classes)."""
-        # Start mit -inf: fehlgeschlagene/ungueltige Modelle bleiben automatisch -inf.
+        # Start mit -inf: fehlgeschlagene/ungültige Modelle bleiben automatisch -inf.
         scores = np.full((len(sequences), len(self.labels)), -np.inf)
         for i, seq in enumerate(sequences):
             seq = np.asarray(seq, dtype=float)
@@ -100,10 +100,10 @@ class HMMClassifier:
                 try:
                     # Forward-Algorithmus: s = log P(Y | Modell).
                     s = model.score(seq)
-                    if np.isfinite(s):       # NaN / -inf nicht uebernehmen
+                    if np.isfinite(s):# NaN / -inf nicht übernehmen
                         scores[i, j] = s
                 except Exception:
-                    pass  # Score nicht berechenbar -> bleibt -inf
+                    pass# Score nicht berechenbar -> bleibt -inf
         return scores
 
     def predict(self, sequences):
@@ -112,7 +112,7 @@ class HMMClassifier:
         out = []
         for row in scores:
             # Fallback: sind alle Scores -inf, ist keine Klasse sinnvoll -> festes
-            # Label, statt dass argmax stillschweigend Index 0 waehlt.
+            # Label, statt dass argmax stillschweigend Index 0 wählt.
             if not np.any(np.isfinite(row)):
                 out.append(self.labels[0])
             else:
@@ -128,14 +128,14 @@ class HMMClassifier:
         ODER das neue Modell - nie eine halb geschriebene Datei.
         """
         path = str(path)
-        tmp = path + ".tmp"
+        tmp = path + ".tmp"# erst in Temp-Datei schreiben
         with open(tmp, "wb") as f:
-            pickle.dump(self, f)
-        os.replace(tmp, path)
+            pickle.dump(self, f)# ganzes Objekt serialisieren
+        os.replace(tmp, path) # dann atomar umbenennen
 
     @classmethod
     def load(cls, path):
-        """Laedt eine fertige HMMClassifier-Instanz (z. B. fuer den Live-Modus)."""
+        """Lädt eine fertige HMMClassifier-Instanz (zB für den Live-Modus)."""
         with open(path, "rb") as f:
             return pickle.load(f)
 

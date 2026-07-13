@@ -32,9 +32,9 @@ import sys
 import pickle
 from pathlib import Path
 
-import cv2
+import cv2 # Kamera + Bild anzeigen/zeichnen
 import numpy as np
-import mediapipe as mp
+import mediapipe as mp # Hand- und Gestenerkennung
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
@@ -44,20 +44,20 @@ from mediapipe.tasks.python import vision
 # labeling.py liegt in GestureRecognition/, der Projekt-Root ist eine Ebene höher.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-RAW_DIR = PROJECT_ROOT / "data" / "raw"                 # Roh-Aufnahmen je Label
-GESTURE_MODEL = PROJECT_ROOT / "gesture_recognizer.task"  # MediaPipe Gesture Recognizer
+RAW_DIR = PROJECT_ROOT / "data" / "raw"  # Roh-Aufnahmen je Label
+GESTURE_MODEL = PROJECT_ROOT / "gesture_recognizer.task" # MediaPipe Gesture Recognizer
 
-FINGER_IDX = 8          # Zeigefinger-Spitze (gleicher Wert wie im Preprocessor)
-MIN_SEQUENCE_LEN = 8    # kürzere Aufnahmen werfen wir beim Datensatz-Bau raus
-N_RESAMPLE = 32         # feste Punktzahl nach Bogenlängen-Resampling (Training == Live!)
+FINGER_IDX = 8  # Zeigefingerspitze (gleicher Wert wie im Preprocessor)
+MIN_SEQUENCE_LEN = 8  #kürzere Aufnahmen werfen wir beim Datensatz-Bau raus
+N_RESAMPLE = 32 # feste Punktzahl nach Bogenlängen-Resampling (Training == Live!)
 
 # Steuer-Gesten (Namen kommen so vom MediaPipe Gesture Recognizer)
 START_GESTURE = "Pointing_Up"
 STOP_GESTURE = "Closed_Fist"
-TRIGGER_FRAMES = 3      # so viele Frames muss eine Geste halten, damit sie zählt (gegen Flackern)
+TRIGGER_FRAMES = 3 # so viele Frames muss eine Geste halten, damit sie zählt (gegen Flackern)
 
 
-# --- Aufnahme ----------------------------------------------------------------
+# --- AufnahmE ----------------------------------------------------------------
 
 def data_labeling(times: int, label: str):
     """
@@ -78,8 +78,8 @@ def data_labeling(times: int, label: str):
     label : str
         Name der Geste / des Buchstabens (z.B. "A", "B", "kreis").
     """
-    label_dir = RAW_DIR / label
-    label_dir.mkdir(parents=True, exist_ok=True)
+    label_dir = RAW_DIR / label # zB data/raw/A
+    label_dir.mkdir(parents=True, exist_ok=True) # Ordner anlegen falls nicht da
 
     if not GESTURE_MODEL.exists():
         raise FileNotFoundError(
@@ -90,18 +90,18 @@ def data_labeling(times: int, label: str):
         )
 
     # Gesture Recognizer laden. Der liefert pro Frame die erkannte Geste UND
-    # die Hand-Landmarks - wir brauchen also nur dieses eine Modell.
-    # Modell als Bytes einlesen statt per Pfad zu uebergeben: MediaPipes interner
-    # Lader kommt mit Sonderzeichen im Pfad (z.B. das "ue" in "Duesseldorf") nicht
+    # die Hand-Landmarks -> wir brauchen also nur dieses eine Modell.
+    # Modell als Bytes einlesen statt per Pfad zu übergeben: MediaPipes interner
+    # Lader kommt mit Sonderzeichen im Pfad (zb das "ü" in "Düsseldorf") nicht
     # klar und wirft sonst einen FileNotFoundError, obwohl die Datei da ist.
     with open(GESTURE_MODEL, "rb") as f:
         model_bytes = f.read()
     base_options = python.BaseOptions(model_asset_buffer=model_bytes)
     options = vision.GestureRecognizerOptions(base_options=base_options, num_hands=1)
-    recognizer = vision.GestureRecognizer.create_from_options(options)
+    recognizer = vision.GestureRecognizer.create_from_options(options)  #fertiges MediaPipe Modell
 
-    cam = _webcam_settings()
-    cap = cv2.VideoCapture(cam["device"])
+    cam = _webcam_settings() # Kamera-Einstellungen aus config.yml
+    cap = cv2.VideoCapture(cam["device"]) # Webcam öffnen
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, cam["width"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cam["height"])
     if not cap.isOpened():
@@ -109,25 +109,26 @@ def data_labeling(times: int, label: str):
         raise RuntimeError(f"Webcam {cam['device']} konnte nicht geöffnet werden "
                            "(deviceIndex in config.yml prüfen).")
 
-    window = f"Labeling: {label}"
+    window = f"Labeling: {label}"   # Titel des Anzeige-Fensters
     state = "idle"              # idle -> recording -> review
     track = []                  # gesammelte Fingerpositionen der aktuellen Aufnahme
-    last_gesture, streak = None, 0
-    saved = 0
+    last_gesture, streak = None, 0   # fürr die Gesten-Entprellung (siehe unten)
+    saved = 0                        # Zähler: wie viele Aufnahmen schon gespeichert
 
     try:
+        # Hauptschleife: läuft bis genug Aufnahmen gespeichert sind
         while saved < times:
-            ok, frame = cap.read()
+            ok, frame = cap.read()   #ein Bild von der Webcam holen
             if not ok:
                 continue
             if cam["flip"]:
-                frame = cv2.flip(frame, 1)
+                frame = cv2.flip(frame, 1)   #spiegeln, wirkt wie ein Spiegel
             h, w = frame.shape[:2]
 
             # MediaPipe erwartet RGB
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-            result = recognizer.recognize(mp_image)
+            result = recognizer.recognize(mp_image)  # Hand + Geste erkennen
 
             # erkannte Geste (bestes Ergebnis der ersten Hand)
             gesture = result.gestures[0][0].category_name if result.gestures else "None"
@@ -156,16 +157,16 @@ def data_labeling(times: int, label: str):
                     track = track[:-TRIGGER_FRAMES] if len(track) > TRIGGER_FRAMES else []
                     state = "review"
 
-            _draw_overlay(frame, state, label, saved, times, track, gesture)
-            cv2.imshow(window, frame)
-            key = cv2.waitKey(1) & 0xFF
+            _draw_overlay(frame, state, label, saved, times, track, gesture)  # Anzeige zeichnen
+            cv2.imshow(window, frame) #Fenster aktualisieren
+            key = cv2.waitKey(1) & 0xFF # gedrückte Taste abfragen
 
             if key == ord("q") or key == 27:   # q oder ESC
-                break
+                break  #Aufnahme-Schleife komplett beenden
 
             # im Review-Zustand auf Tastendruck warten
             if state == "review":
-                if key == ord("s"):
+                if key == ord("s"):   # s = speichern
                     if len(track) < MIN_SEQUENCE_LEN:
                         print(f"-> zu kurz ({len(track)} Punkte), nicht gespeichert.")
                     else:
@@ -174,14 +175,15 @@ def data_labeling(times: int, label: str):
                         with open(target, "wb") as f:
                             pickle.dump({"label": label,
                                          "finger_idx": FINGER_IDX,
-                                         "track": np.array(track, dtype=float)}, f)
+                                         "track": np.array(track, dtype=float)}, f)  # als Pickle-Datei speichern
                         saved += 1
                         print(f"-> gespeichert: {target.name}  ({len(track)} Punkte)")
-                    state, track = "idle", []
-                elif key in (ord("v"), ord("n")):
+                    state, track = "idle", []   # zurück zum Start, Spur leeren
+                elif key in (ord("v"), ord("n")):   # v/n = verwerfen
                     print("-> verworfen.")
                     state, track = "idle", []
     finally:
+        # läuft IMMER, auch bei Fehler/Abbruch -> Kamera nicht blockiert lassen
         cap.release()
         cv2.destroyAllWindows()
         recognizer.close()
@@ -196,14 +198,14 @@ def _draw_overlay(frame, state, label, saved, times, track, gesture):
     # Fingerspur: normalisierte Koordinaten (0..1) -> Pixel
     pts = [(int(x * w), int(y * h)) for (x, y) in track]
     for i in range(1, len(pts)):
-        cv2.line(frame, pts[i - 1], pts[i], (0, 255, 255), 2)
+        cv2.line(frame, pts[i - 1], pts[i], (0, 255, 255), 2)  #gelbe Linie
     if pts:
-        cv2.circle(frame, pts[-1], 6, (0, 255, 255), -1)
+        cv2.circle(frame, pts[-1], 6, (0, 255, 255), -1)  #Punkt an Fingerspitze
 
     # Hinweistext je Zustand (ASCII, weil OpenCV keine Umlaute kann)
     texte = {
         "idle":      f"'{label}'  [{saved}/{times}]  -> Zeigefinger HOCH = Start",
-        "recording": f"Aufnahme laeuft ({len(track)})  -> FAUST = Stop",
+        "recording": f"Aufnahme läuft ({len(track)})  -> FAUST = Stop",
         "review":    "[s] speichern   [v] verwerfen   [q] beenden",
     }
     farben = {"idle": (200, 200, 200), "recording": (0, 0, 255), "review": (0, 255, 0)}
@@ -219,23 +221,23 @@ def _webcam_settings():
     try:
         import yaml
         with open(PROJECT_ROOT / "config.yml") as f:
-            cfg = yaml.safe_load(f) or {}
+            cfg = yaml.safe_load(f) or {}   # yaml Datei als dict einlesen
     except Exception:
         pass  # keine config -> Defaults
     wc = cfg.get("webcam", {}) if isinstance(cfg, dict) else {}
     return {
-        "device": wc.get("deviceIndex", 0),
+        "device": wc.get("deviceIndex", 0), # welche Kamera (0 = erste)
         "width": wc.get("width", 640),
         "height": wc.get("height", 360),
-        "flip": wc.get("flip", True),
+        "flip": wc.get("flip", True), # spiegeln wie ein Spiegel
     }
 
 
 def _next_index(label_dir: Path, label: str) -> int:
     """Nächste freie Nummer für ein Label finden (keine Aufnahme überschreiben)."""
     nums = []
-    for p in label_dir.glob(f"{label}_*.pickle"):
-        stamm = p.stem.replace(f"{label}_", "")
+    for p in label_dir.glob(f"{label}_*.pickle"):  # alle vorhandenen Dateien für dieses Label
+        stamm = p.stem.replace(f"{label}_", "") # Nummer aus Dateiname holen
         if stamm.isdigit():
             nums.append(int(stamm))
     return max(nums) + 1 if nums else 0
@@ -322,20 +324,20 @@ def dataset_building(output_path):
     output_path : Path or str
         Zielpfad für den erzeugten Datensatz (z.B. "data/dataset.pkl").
     """
-    dataset = {}
+    dataset = {}   # am Ende: {label: [normalisierte Sequenzen]}
 
-    for label_dir in sorted(RAW_DIR.glob("*")):
+    for label_dir in sorted(RAW_DIR.glob("*")): # jeder Ordner = ein Label (z.B. A, B, ...)
         if not label_dir.is_dir():
             continue
         label = label_dir.name
 
         sequences = []
-        for rec in sorted(label_dir.glob("*.pickle")):
+        for rec in sorted(label_dir.glob("*.pickle")):#jede Datei = eine Aufnahme
             track = _extract_finger_track(rec)
             if len(track) < MIN_SEQUENCE_LEN:
                 print(f"  übersprungen (nur {len(track)} Punkte): {rec.name}")
                 continue
-            sequences.append(normalize_trajectory(track))
+            sequences.append(normalize_trajectory(track))# gleich normalisieren wie live
 
         if sequences:
             dataset[label] = sequences
@@ -344,7 +346,7 @@ def dataset_building(output_path):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "wb") as f:
-        pickle.dump(dataset, f)
+        pickle.dump(dataset, f) # Datensatz als Datei speichern
 
     klassen = len(dataset)
     gesamt = sum(len(v) for v in dataset.values())
@@ -364,7 +366,7 @@ def inspect_recording(path):
         print(f"Typ: {type(data).__name__}")
 
 
-# --- direkt aus der Konsole aufrufbar ---------------------------------------
+# --- direkt aus der Konsole aufrufbar ------
 
 if __name__ == "__main__":
     # Nutzung:
@@ -374,8 +376,8 @@ if __name__ == "__main__":
         zielpfad = sys.argv[2] if len(sys.argv) > 2 else PROJECT_ROOT / "data" / "dataset.pkl"
         dataset_building(zielpfad)
     elif len(sys.argv) >= 2:
-        gesten_label = sys.argv[1]
-        anzahl = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+        gesten_label = sys.argv[1] # z.B. "A"
+        anzahl = int(sys.argv[2]) if len(sys.argv) > 2 else 5 # Standard: 5 Aufnahmen
         data_labeling(anzahl, gesten_label)
     else:
         print("Aufruf:  python -m GestureRecognition.labeling <label> [anzahl]")
