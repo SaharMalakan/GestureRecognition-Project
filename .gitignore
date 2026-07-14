@@ -13,8 +13,6 @@ wheels/
 data/*
 !data/raw/
 
-.training.py
-
 # Analyse-/Debug-Artefakte (nicht Teil der Abgabe, liegen in ../MPT-Lernmaterial)
 debug_live*
 *_majority.png

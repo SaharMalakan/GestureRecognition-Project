@@ -194,7 +194,7 @@ class HMMModule(Module):
                 new_h = max(1, int(template.shape[0] * scale))
                 resized = cv2.resize(template, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-                # mittig platzieren, genau wie vorher der Text
+                # mittig platzieren
                 x = max(0, (frame_w - new_w) // 2)
                 y = max(0, (frame_h - new_h) // 2)
 

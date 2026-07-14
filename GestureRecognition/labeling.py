@@ -253,7 +253,7 @@ def resample_trajectory(points, n=N_RESAMPLE):
     gemaltes "M" hat mehr Punkte als ein schnelles. Das HMM sieht dann pro Geste
     andere Sequenzlängen und Punktdichten. Nach dem Umtasten hat JEDE Geste gleich
     viele, entlang des Pfads gleichmäßig verteilte Punkte -> geschwindigkeits- und
-    längeninvariant. (Grösster Hebel für die Accuracy, empirisch belegt.)
+    längeninvariant.
 
     Wichtig: identisch im Preprocessor live (modules/preprocessor.py)!
     """
@@ -295,7 +295,7 @@ def normalize_trajectory(points):
     Wichtig: Training und Live-Erkennung müssen exakt gleich verarbeiten!
     """
     points = np.asarray(points, dtype=float)
-    points = resample_trajectory(points, N_RESAMPLE)   # NEU: erst auf feste Länge bringen
+    points = resample_trajectory(points, N_RESAMPLE)   # erst auf feste Länge bringen
     return _center_and_scale(points)
 
 
